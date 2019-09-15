@@ -1,0 +1,102 @@
+commit 0cae2ffdafcd1e66ccac525bac6ea30746d1ecb4
+Merge: 45b908f 815a5e4
+Author: Yan Hua <huayan@ssh-linux2.ece.ubc.ca>
+Date:   Sun Sep 8 15:36:30 2019 -0700
+
+    Merge branch 'master' of https://bitbucket.org/yanhua111/os161
+
+commit 45b908f2bdf803c80bcce3582faa62127f445145
+Author: Yan Hua <huayan@ssh-linux2.ece.ubc.ca>
+Date:   Sun Sep 8 14:43:31 2019 -0700
+
+    Initial commit of os161 for CPEN331
+
+commit 815a5e4fab56aaa4b516624a97956e4e7424a4c2
+Author: Yan Hua <huayan007008@gmail.com>
+Date:   Sun Sep 8 21:21:21 2019 +0000
+
+    Initial commit
+asst1-start
+Question 1: The first line that is executed when a trap occurs is in ~/os161/src/kern/arch/mips/locore/exception-mips1.S, specifically, if the traps came from user mode, then the first line that is executed is line 111(mfc0 k1, c0_context); if it came from kernel, then it is line 121(move k1, sp). The control then got transferred to mips_trap(struct trapframe *).
+The first line that is executed when an interrupt occurs is in ~/os161/src/kern/arch/sys161/dev/lamebus_machdep.c. At line 288, function mainbus_interrupt(struct trapframe *tf) should be called when an interrupt occurs. Then the control is passed to several different controllers, namely lamebus_interrupt(struct lamebus_softc *lamebus), lamebus_clear_ipi(struct lamebus_softc *, struct cpu *targetcpu) and mips_timer_set(uint32_t count).
+The difference between trap and interrupt: traps are caused by current running process, but interrupts are caused by device and may not be related to running process.
+
+Question 2:
+In file ~/os161/src/userland/lib/libc/arch/mips/syscalls-mips.S, at line 87, error number is stored to indicate that there is a trap.
+
+Question 3:
+It is in the common land so that it could be used by the kernel, it is in userland as well because users can also have access to libc functions.
+
+Question 4:
+Target hardware platform and machine type. In the configure file, shown as PLATFORM='sys161'  MACHINE='mips'. 
+What might invalidate that configuration and make you need/want to rerun it?
+Adding a new file to the system would require the configure file to be rerunned, as stated in ~os161/src/kern/conf/conf.kern, “To add new files to the system, you need to edit this file (or others like it) and rerun the config script.
+
+Questions 5:
+When it comes to things like: trap handling, CPU control, Physical memory operations, most functions will be machine-dependent. Machine-dependent functions are used to control hardware and machine-independent functions can be accessed within the userland. Therefore, it is important to keep the separation.
+
+Question 6:
+In the file ~/os161/src/kern/arch/mips/include/trapframe.h, trapframe consists of 37 32-bit integers, which is 1184 bits(148 bytes). It is this large because it needs to save all the common registers when an exception happens, such as register 31, register 1, 2. It also needs to save the coprocessor register.
+
+Question 7:
+If new files are added to the system, as indicated in kern/conf/conf.kern
+
+Question 8:
+Bmake depend is runned when first compiling the kernel. It also needs to be rerunned if any header file inclusions are modified, or after rerunning config. 
+
+Questions 9:
+Bmake is usually run after bmake depend. Bmake is for compiling any programs, while bmake install is for installing that program into the right place in ~/os161/root.
+
+Questions 10:
+We need to write a function that prints out “Hello world!”, call it “sayHello” and then in the file kern/main/menu.c, we need to add { "Hello World",		sayHello } to the cmdtable struct.
+
+Question 11:
+Because the machine we are working with is a linux system, and os161 is a different system from that, they have different configurations. They may have different kinds of utilities.
+
+Questions 12:
+It will be stored in v0. As indicated in kern/arch/mips/syscall/syscall.c.
+
+Question 13:
+A system call number need to be added to the file kern/include/kern/syscall.h, like “#define SYS_something        666”. Then a C file implementing the system call need to be added to kern/syscall/. Then a line like “SRCS+=$(KTOP)/syscall/some_syscall.c” also needs to be added to the file kern/compile/DUMBVM/files.mk. Finally the location of the C file needs to be added to the system call layer in kern/conf/conf.kern.
+In order to use the program, kern/conf/config needs to be rerun first, then bmake depend, bmake and then bmake install
+
+Question 14:
+From the line __start () at ../../arch/sys161/main/start.S:54, we can see the function is __start().
+
+Question 15:
+addiu sp, sp, -24
+
+Question 16:
+Num     Type           Disp Enb Address    What
+1       breakpoint     keep y   0x80014a0c in menu at ../../main/menu.c:697
+2       breakpoint     keep y   0x800139e4 in kmain at ../../main/main.c:21
+
+Question 17:
+It first runs __start, which allocates configures the virtual memory and physical memory, it sets up the register and cpu as well. Then it goes to kmain and start to boot the system.
+
+Questions 18:
+ jal kmain
+
+Question 19:
+108		/* Early initialization. */
+109		ram_bootstrap();
+110		proc_bootstrap();
+111		thread_bootstrap();
+112		hardclock_bootstrap();
+113		vfs_bootstrap();
+114		kheap_nextgeneration()
+
+Question 20:
+Cannot access memory at address 0x8000
+
+Question 21:
+$1 = {c_self = 0x8003af00, c_number = 0, c_hardware_number = 0, c_curthread = 0x8003bf80, c_zombies = {tl_head = {tln_prev = 0x0, tln_next = 0x8003af1c, tln_self = 0x0}, tl_tail = {tln_prev = 0x8003af10, tln_next = 0x0, tln_self = 0x0}, tl_count = 0}, c_hardclocks = 0, c_spinlocks = 0, c_isidle = false, c_runqueue = {tl_head = {tln_prev = 0x0, tln_next = 0x8003af44, tln_self = 0x0}, tl_tail = {tln_prev = 0x8003af38, tln_next = 0x0, tln_self = 0x0}, tl_count = 0}, c_runqueue_lock = {splk_lock = 0, splk_holder = 0x0}, c_ipi_pending = 0, c_shootdown = {{ts_placeholder = 0} <repeats 16 times>}, c_numshootdown = 0, c_ipi_lock = {splk_lock = 0, splk_holder = 0x0}}
+
+Question 22:
+0 cpus
+
+Questions 23:
+1 cpus
+cpu 0:
+$1 = {c_self = 0x8003af00, c_number = 0, c_hardware_number = 0, c_curthread = 0x8003bf80, c_zombies = {tl_head = {tln_prev = 0x0, tln_next = 0x8003af1c, tln_self = 0x0}, tl_tail = {tln_prev = 0x8003af10, tln_next = 0x0, tln_self = 0x0}, tl_count = 0}, c_hardclocks = 1, c_spinlocks = 0, c_isidle = false, c_runqueue = {tl_head = {tln_prev = 0x0, tln_next = 0x8003af44, tln_self = 0x0}, tl_tail = {tln_prev = 0x8003af38, tln_next = 0x0, tln_self = 0x0}, tl_count = 0}, c_runqueue_lock = {splk_lock = 0, splk_holder = 0x0}, c_ipi_pending = 0, c_shootdown = {{ts_placeholder = 0} <repeats 16 times>}, c_numshootdown = 0, c_ipi_lock = {splk_lock = 0, splk_holder = 0x0}}
+
