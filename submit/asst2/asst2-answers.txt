@@ -1,0 +1,34 @@
+Question 1:
+In kern/thread/thread.c. When thread_exit() is called, it first detaches the thread from the process, and then check the stack guard band. Then it disables all interrupts in the process, it sets the thread’s status to S_ZOMBIE and send a panic. When it sleeps, wchan_sleep() makes sure the thread is not in an interrupt handler. Then it checks the thread holds and only holds one spinclock. After that, it switches the thread status to S_SLEEP and acquire spinlock.
+
+Question 2:
+Switchframe_switch in kern/arch/mips/thread/switch.S; thread_switch in kern/thread/thread.c.
+
+Question 3:
+S_RUN: The thread is running.
+S_READY: The thread is runnable and has lock.
+S_SLEEP: The thread is waiting on channel WC, protected by spinlock LK.
+S_ZOMBIE: The thread is being detached and cannot be used anymore. 
+
+Question 4:
+Turning interrupt off meaning disabling any all other processed to interrupt the current process. Interrupt is turned off by calling splhigh(), what is does is setting the set priority level of the thread to highest, so other processes cannot run over this one. It is important to turn it off in subsystem because this could provide isolation, so that data from different processes would not conflict with each other. 
+
+Question 5:
+It first make sure the current thread is holding a spinlock, it then takes a thread on the wait channel and make the thread runnable and acquire a runqueue lock. Then the thread could be run when thread_switch() is called. 
+
+Question 6:
+thread_switch(), switchframe_switch(), and threadlist_remhead()
+
+Question 7:
+thread_switch() picks the thread from the head of the runqueue using threadlist_remhead(), and then do the switch by calling switchframe_switch().
+
+Question 8:
+hardclock() is called 100 times per second. When hardclock() is called, it would call thread_consider_migration() or schedule(), then it calls thread_yield, which provides a chance for threads to switch.
+
+Question 9:
+When wchan_sleep() is called, it will be turned into S_SLEEP, then it tries to acquire lk, which makes it busy waiting for the spin lock. This is like the P in semaphore.
+When wchan_wakeone() is called, it releases the spinlock lk by calling thread_make_runnable, which is the V in semaphore. 
+
+Question 10:
+Because when wchan_sleep calls thread_switch, it locks the run queue first, place the thread in the wait queue, then it releases the run queue. Therefore, another thread won’t be able to another thread while it is preparing to sleep.
+
