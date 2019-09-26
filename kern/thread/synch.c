@@ -148,6 +148,7 @@ struct lock *
 lock_create(const char *name)
 {
         struct lock *lock;
+
         lock = kmalloc(sizeof(struct lock));
         if (lock == NULL) {
                 return NULL;
@@ -168,6 +169,9 @@ lock_create(const char *name)
 	spinlock_init(&lock->lk_lock);
         lock->cur_thread = NULL;
 	lock->lk_available = true;
+
+        // add stuff here as needed
+
         return lock;
 }
 
@@ -178,6 +182,8 @@ lock_destroy(struct lock *lock)
 
 	spinlock_cleanup(&lock->lk_lock);
 	wchan_destroy(lock->lk_wchan);
+        // add stuff here as needed
+
         kfree(lock->lk_name);
         kfree(lock);
 }
@@ -209,6 +215,7 @@ lock_release(struct lock *lock)
 	wchan_wakeone(lock->lk_wchan, &lock->lk_lock);
 
 	spinlock_release(&lock->lk_lock);
+        // Write this
 }
 
 bool
@@ -256,6 +263,7 @@ cv_destroy(struct cv *cv)
 
         spinlock_cleanup(&cv->cv_lock);
 	wchan_destroy(cv->cv_wchan);
+
         kfree(cv->cv_name);
         kfree(cv);
 }
@@ -290,4 +298,5 @@ cv_broadcast(struct cv *cv, struct lock *lock)
         spinlock_acquire(&cv->cv_lock);
 	wchan_wakeall(cv->cv_wchan, &cv->cv_lock);
         spinlock_release(&cv->cv_lock);
+	// Write this
 }
