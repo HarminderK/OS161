@@ -55,6 +55,7 @@ static
 void
 inititems(void)
 {
+	kprintf("random:%zu\n", random()); 
 	if (testsem==NULL) {
 		testsem = sem_create("testsem", 2);
 		if (testsem == NULL) {
