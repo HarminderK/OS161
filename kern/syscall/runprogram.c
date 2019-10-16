@@ -44,6 +44,7 @@
 #include <vfs.h>
 #include <syscall.h>
 #include <test.h>
+#include <file.h>
 
 /*
  * Load program "progname" and start running it in usermode.
@@ -64,6 +65,9 @@ runprogram(char *progname)
 	if (result) {
 		return result;
 	}
+
+	/* initialize filetable */
+	filetable_init(curproc->p_filetable);
 
 	/* We should be a new process. */
 	KASSERT(proc_getas() == NULL);

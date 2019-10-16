@@ -39,8 +39,11 @@
 #include <spinlock.h>
 #include <thread.h> /* required for struct threadarray */
 
+//#include <file.h>
+
 struct addrspace;
 struct vnode;
+struct filetable;
 
 /*
  * Process structure.
@@ -57,6 +60,7 @@ struct proc {
 	struct vnode *p_cwd;		/* current working directory */
 
 	/* add more material here as needed */
+	struct filetable *p_filetable;
 };
 
 /* This is the process structure for the kernel and for kernel-only threads. */
