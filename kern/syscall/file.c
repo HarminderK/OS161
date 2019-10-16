@@ -6,6 +6,7 @@
 #include <synch.h>
 #include <current.h>
 #include <proc.h>
+#include <lib.h>
 
  
  /* initialize filetable */
@@ -16,10 +17,10 @@ int filetable_init(struct filetable *ft) {
     // struct file *file_out;
     // struct file *file_err;
     (void) ft;
-    int *fd = 0;
-    
+    int fd = 0;
     int res;
-    
+    char filename[5];
+    strcpy(filename, "con:");
     curproc->p_filetable = kmalloc(sizeof(struct filetable));
     int i = 0;
     
@@ -31,17 +32,20 @@ int filetable_init(struct filetable *ft) {
 
     /* enable consoles */
     // STDIN
-    res = file_open((char *)"con:", O_RDONLY, 0, fd);
+    
+    res = file_open(filename, O_RDONLY, 0, &fd);
     if(res) {
         return res;
     }
     //STDOUT
-    res = file_open((char *)"con:", O_WRONLY, 0, fd);
+    strcpy(filename, "con:");
+    res = file_open(filename, O_WRONLY, 0, &fd);
     if(res) {
         return res;
     }
     //STDERR
-    res = file_open((char *)"con:", O_WRONLY, 0, fd);
+    strcpy(filename, "con:");
+    res = file_open(filename, O_WRONLY, 0, &fd);
     if(res) {
         return res;
     }
@@ -122,14 +126,17 @@ int filetable_destroy(struct filetable *ft) {
 }
 
 /* add a file to filetable */
-int filetable_add(struct file *file, int *fd) {
+int filetable_add(struct file **file, int *fd) {
+    lock_acquire(curproc->p_filetable->ft_lock);
 	for( int i = 0; i < OPEN_MAX; i++) {
 		if( curproc->p_filetable->files[i] == NULL) {
-			curproc->p_filetable->files[i] = file;
+			curproc->p_filetable->files[i] = *file;
 			*fd = i;
+            lock_release(curproc->p_filetable->ft_lock);
 			return 0;
 		}
 	}
+    lock_release(curproc->p_filetable->ft_lock);
 	return -1;
 }
  
@@ -152,7 +159,7 @@ int file_open(char *filename, int flag, mode_t mode, int *fd) {
         file->f_lock = lock_create("f_lock");
         file->f_vnode = vn;
     
-    res = filetable_add(file, fd);
+    res = filetable_add(&file, fd);
     if(res) {
         return res;
     }

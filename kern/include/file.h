@@ -28,7 +28,7 @@ struct filetable {
  
 int filetable_init(struct filetable *ft);
 int filetable_destroy(struct filetable *ft);
-int filetable_add( struct file *file, int *fd);
+int filetable_add( struct file **file, int *fd);
 int filetable_remove( int fd);
 int file_open(char *filename, int flags, mode_t mode, int *fd);
 int file_destroy(struct file *file);
