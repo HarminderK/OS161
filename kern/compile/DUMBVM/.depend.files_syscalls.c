@@ -10,4 +10,6 @@ files_syscalls.o: ../../syscall/files_syscalls.c ../../include/types.h \
  includelinks/machine/current.h ../../include/thread.h \
  ../../include/threadlist.h includelinks/machine/thread.h \
  ../../include/setjmp.h includelinks/kern/machine/setjmp.h \
- ../../include/uio.h ../../include/kern/iovec.h ../../include/proc.h
+ ../../include/uio.h ../../include/kern/iovec.h ../../include/proc.h \
+ ../../include/kern/seek.h ../../include/stat.h ../../include/kern/stat.h \
+ ../../include/kern/stattypes.h

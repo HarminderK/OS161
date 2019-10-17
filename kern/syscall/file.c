@@ -156,6 +156,7 @@ int file_open(char *filename, int flag, mode_t mode, int *fd) {
         file->filename = filename;
         file->flag = flag;
         file->offset = 0;
+        file->mode = mode;
         file->f_lock = lock_create("f_lock");
         file->f_vnode = vn;
     
@@ -169,9 +170,10 @@ int file_open(char *filename, int flag, mode_t mode, int *fd) {
 
 /* destroy a file struct */
 int file_destroy(struct file *file){
+    lock_acquire(file->f_lock);
     vfs_close(file->f_vnode);
+    lock_release(file->f_lock);
 	lock_destroy(file->f_lock);
 	kfree(file);
     return 0;
 }
-

@@ -35,6 +35,7 @@
 #include <thread.h>
 #include <current.h>
 #include <syscall.h>
+#include <copyinout.h>
 
 /*
  * System call dispatcher.
@@ -79,7 +80,11 @@ syscall(struct trapframe *tf)
 {
 	int callno;
 	int32_t retval;
+	int32_t retval1;
 	int err;
+	int32_t sp1;
+	int64_t retval64;
+
 
 	KASSERT(curthread != NULL);
 	KASSERT(curthread->t_curspl == 0);
@@ -125,6 +130,27 @@ syscall(struct trapframe *tf)
 		err = sys_close((int)tf->tf_a0);
 		break;
 
+		case SYS_lseek:
+		copyin((const_userptr_t) tf->tf_sp + 16, &sp1, sizeof(int32_t));
+		err = sys_lseek((int)tf->tf_a0, (off_t) ((off_t)tf->tf_a2 << 32 | (off_t)tf->tf_a3), (int) sp1, (off_t *)&retval64);
+		retval = retval64 >> 32;
+		retval1 = (int) retval64;
+		break;
+
+		case SYS_chdir:
+		err = sys_chdir((const char *)tf->tf_a0);
+		break;
+
+		case SYS_dup2:
+		err = sys_dup2((int)tf->tf_a0, (int)tf->tf_a1, &retval);
+		break;
+
+		case SYS___getcwd:
+		err = sys___getcwd((char *)tf->tf_a0, (size_t)tf->tf_a1, &retval);
+		break;
+
+
+
 	    default:
 		kprintf("Unknown syscall %d\n", callno);
 		err = ENOSYS;
@@ -144,6 +170,7 @@ syscall(struct trapframe *tf)
 	else {
 		/* Success. */
 		tf->tf_v0 = retval;
+		tf->tf_v1 = retval1;
 		tf->tf_a3 = 0;      /* signal no error */
 	}
 

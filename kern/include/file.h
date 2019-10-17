@@ -14,6 +14,7 @@ struct file {
     char *filename;
     int flag;
     volatile __off_t offset;
+    mode_t mode;
     struct lock *f_lock;
     struct vnode *f_vnode;
 };
