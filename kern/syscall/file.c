@@ -95,7 +95,7 @@ int filetable_init(struct filetable *ft) {
  
 /* removes a file from filetable */
 int filetable_remove(int fd) {
-	if(fd >= OPEN_MAX) {
+	if(fd >= OPEN_MAX || fd < 0) {
 		return -1; // Index out of bound;
 	}
 	lock_acquire(curproc->p_filetable->ft_lock);
@@ -106,8 +106,17 @@ int filetable_remove(int fd) {
                         return -1;
 	}
 	curproc->p_filetable->files[fd] = NULL;
-	file_destroy(file);
-	lock_release(curproc->p_filetable->ft_lock);
+    lock_release(curproc->p_filetable->ft_lock);
+
+    lock_acquire(file->f_lock);
+    if(file->f_refcount > 1){
+        file->f_refcount--;
+        lock_release(file->f_lock);
+    } else {
+        lock_release(file->f_lock);
+        file_destroy(file);
+    }
+	
  
 return 0;
 }
@@ -156,7 +165,8 @@ int file_open(char *filename, int flag, mode_t mode, int *fd) {
         file->filename = filename;
         file->flag = flag;
         file->offset = 0;
-        file->mode = mode;
+        file->f_refcount = 1;
+        file->mode = flag & O_ACCMODE;
         file->f_lock = lock_create("f_lock");
         file->f_vnode = vn;
     
@@ -177,3 +187,5 @@ int file_destroy(struct file *file){
 	kfree(file);
     return 0;
 }
+
+

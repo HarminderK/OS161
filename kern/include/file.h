@@ -14,7 +14,8 @@ struct file {
     char *filename;
     int flag;
     volatile __off_t offset;
-    mode_t mode;
+    int f_refcount;
+    int mode;
     struct lock *f_lock;
     struct vnode *f_vnode;
 };
@@ -33,6 +34,7 @@ int filetable_add( struct file **file, int *fd);
 int filetable_remove( int fd);
 int file_open(char *filename, int flags, mode_t mode, int *fd);
 int file_destroy(struct file *file);
+
  
 #endif /* _FILE_H_ */
 

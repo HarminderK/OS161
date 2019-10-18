@@ -1,0 +1,50 @@
+1:
+It is the first 4 bytes of an ELF file, which is 0x7f, ‘E’, ‘L’, ‘F’, it is used to identify an ELF file.
+
+2.
+UIO_USERISPACE is user process code and UIO_USERSPACE is user process data. UIO_USERISPACE is assigned to segflg if the segment is executable. UIO_SYSSPACE needs to be used when dealing with kernel data.
+
+3.
+UIO is saving information of the memory read, the actual memory read goes into the virtual address.
+
+4. 
+Essentially, vfs_close decrements the refcount, it has to be called for the kernel to organize file operations, for example, if refcount is 0, then no process is using the file. (in vnode.c, vnode_decref, which is called by VOP_DECREF, which is called in vfs_close()) To clean up/close open resources before leaving kernel space.
+
+5.
+Enter_new_process in trap.c, used to switch into usermode it calls mips_usermode, it is machine independent.
+
+6.
+They are defined in copyinout.c and copyinout.h; memmove() is defined in lib.h. Copyin and copyout is needed because if the kernel manipulates user space memory directly, it may involve illegal operations. Copyin/copyout separates the operations in kernel and userspace. copyin and copyout copy from user space to kernel space and vice verse, something memove can't do.
+
+
+7. 
+The userptr_t is used by copycheck() to ensure the memory is in userspace.
+
+8. 
+8, defined in trapframe.h. #define EX_SYS    8    /* Syscall */
+
+9. 
+4 bytes. As described in syscall.c, upon return, pc need to be incremented by 1 instruction, which is 4 bytes.
+
+10.
+The kernel should handle fault from user instead of panic.
+
+11.
+Arguments will be fetched from user-level stack, starting from sp+16.
+
+12.
+It is for syscall to have a specific call number and distinguish different syscalls, it is for the kernel to be able to jump to the shared syscall code using syscall number in register v0.
+
+13. 
+By simply using “syscall” -- syscalls-mips.S.
+
+14.
+Arg1 will be in register a0, a1 is unused, arg2 will be in a2 and a3, arg3 will be on user-level stack and return value will be in v0 and v1.  
+
+15. 
+Open a file: vfs_open().
+Macros for reading a file: UIO_READ, VOP_READ; UIO_WRITE, VOP_WRITE. Struct vnode is used to represent an open file.
+
+16. 
+It is for incrementing and decrementing the refcount.
+

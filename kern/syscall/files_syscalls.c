@@ -11,6 +11,7 @@
 #include <proc.h>
 #include <kern/seek.h>
 #include <stat.h>
+#include <kern/fcntl.h>
 
 int sys_open(const char *filename, int flags, mode_t mode, int *retval) {
     int res;
@@ -29,6 +30,10 @@ int sys_open(const char *filename, int flags, mode_t mode, int *retval) {
 int sys_close(int fd) {
     struct file *file;
     int res;
+    if(fd >= __OPEN_MAX || fd < 0) {
+        return EBADF;
+	}
+
     lock_acquire(curproc->p_filetable->ft_lock);
     file = curproc->p_filetable->files[fd];
     lock_release(curproc->p_filetable->ft_lock);
@@ -46,15 +51,24 @@ int sys_read(int fd, void *buf, size_t buflen, int *retval) {
     struct file *file;
     int res;
     
+    if(fd >= __OPEN_MAX || fd < 0) {
+        return EBADF;
+	}
+
     lock_acquire(curproc->p_filetable->ft_lock);
     file = curproc->p_filetable->files[fd];
     lock_release(curproc->p_filetable->ft_lock);
+
     if (file == NULL) {
         return EBADF;
     }
-
     lock_acquire(file->f_lock);
-    uio_kinit(&iovec, &uio, buf, buflen, file->offset, UIO_READ);
+    if((int)file->mode == O_WRONLY) {
+        lock_release(file->f_lock);
+        return EBADF;
+    }
+
+    uio_uinit(&iovec, &uio, buf, buflen, file->offset, UIO_READ);
     res = VOP_READ(file->f_vnode, &uio);
     if(res) {
         lock_release(file->f_lock);
@@ -72,20 +86,24 @@ int sys_write(int fd, void *buf, size_t buflen, int *retval) {
     struct uio uio;
     struct file *file;
     int res;
-    struct filetable *filetable;
+
+    if(fd >= __OPEN_MAX || fd < 0) {
+        return EBADF;
+	}
+
     lock_acquire(curproc->p_filetable->ft_lock);
-    filetable = curproc->p_filetable;
-    if(filetable == NULL) {
-        kprintf("filetable is NULL\n");
-    }
     file = curproc->p_filetable->files[fd];
     lock_release(curproc->p_filetable->ft_lock);
     if (file == NULL) {
         return EBADF;
     }
-
     lock_acquire(file->f_lock);
-    uio_kinit(&iovec, &uio, buf, buflen, file->offset, UIO_WRITE);
+    if(file->mode == O_RDONLY) {
+        lock_release(file->f_lock);
+        return EBADF;
+    }
+    
+    uio_uinit(&iovec, &uio, buf, buflen, file->offset, UIO_WRITE);
     res = VOP_WRITE(file->f_vnode, &uio);
     if(res) {
         lock_release(file->f_lock);
@@ -122,21 +140,22 @@ sys_lseek(int fd, off_t pos, int whence, off_t *retval)
     if(fd >= __OPEN_MAX || fd < 0) {
         return EBADF;
 	}
-    
+    int res;
     struct filetable *ft = curproc->p_filetable;
     struct file *file = ft->files[fd];
-    lock_acquire(file->f_lock);
+    
 
     if(file == NULL){
         return EBADF;
     }
-
-    // res = VOP_ISSEEKABLE(file->f_vnode);
-    // if(res){
-    //     return ESPIPE;
-    // }
+    lock_acquire(file->f_lock);
+    res = !VOP_ISSEEKABLE(file->f_vnode);
+    if(res){
+        lock_release(file->f_lock);
+        return ESPIPE;
+    }
     off_t newPos;
-    int res;
+    
     struct stat stat;
     
     switch (whence)
@@ -163,6 +182,7 @@ sys_lseek(int fd, off_t pos, int whence, off_t *retval)
     *retval = newPos;
 
     if(newPos < 0){
+        lock_release(file->f_lock);
         return EINVAL;
     }
     
@@ -212,6 +232,7 @@ ENFILE		The system's file table was full, if such a thing is possible, or a glob
 int
 sys_dup2(int oldfd, int newfd, int *retval)
 {
+    *retval = newfd;
     if(oldfd >= __OPEN_MAX || oldfd < 0 || newfd >= __OPEN_MAX || newfd < 0) {
 		return EBADF; // An index out of bound;
 	}
@@ -221,12 +242,21 @@ sys_dup2(int oldfd, int newfd, int *retval)
     }
     
     struct filetable *ft = curproc->p_filetable;
-
+    lock_acquire(ft->ft_lock);
     struct file *file = ft->files[oldfd];
 
-    if(ft->files[newfd] != NULL) {
-        filetable_remove(newfd);
+     if(file == NULL){
+        lock_release(ft->ft_lock);
+        return EBADF;
     }
+    
+    lock_acquire(file->f_lock);    
+    if(ft->files[newfd] != NULL) {
+        lock_release(ft->ft_lock);
+        sys_close(newfd);
+        lock_acquire(ft->ft_lock);
+    }
+    
     // struct file *dupFile;    
 
     // dupFile = kmalloc(sizeof(struct file));
@@ -236,18 +266,15 @@ sys_dup2(int oldfd, int newfd, int *retval)
     // dupFile->mode = file->mode;
     // dupFile->f_lock = lock_create("f_lock");
     // dupFile->f_vnode = file->f_vnode;
-    lock_acquire(file->f_lock);
-     if(file == NULL){
-        return EBADF;
-    }
-    VOP_INCREF(file->f_vnode);
-    lock_release(file->f_lock);
-    
-    lock_acquire(ft->ft_lock);
-    ft->files[newfd] = file;
-    lock_release(ft->ft_lock);
+   
+    // VOP_INCREF(file->f_vnode);
 
-    *retval = newfd;
+    file->f_refcount++;
+    ft->files[newfd] = file;
+
+    lock_release(file->f_lock);
+    lock_release(ft->ft_lock);
+    
     return 0;
 }
 
@@ -266,7 +293,7 @@ sys___getcwd(char *buf, size_t buflen, int *retval)
 {
     struct iovec iov;
     struct uio sys_uio;
-    uio_kinit(&iov, &sys_uio, buf, buflen, 0, UIO_READ);
+    uio_uinit(&iov, &sys_uio, buf, buflen, 0, UIO_READ);
 
     int res = vfs_getcwd(&sys_uio);
     if(res){
@@ -275,5 +302,6 @@ sys___getcwd(char *buf, size_t buflen, int *retval)
     *retval = buflen - sys_uio.uio_resid;
     return 0;
 }
+
 
 
