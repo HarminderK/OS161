@@ -1,3 +1,4 @@
 build/*
 configure
 kern/compile/DUMBVM
+kern/conf/*
