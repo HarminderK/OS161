@@ -1,0 +1,3 @@
+build/*
+configure
+kern/compile/DUMBVM
