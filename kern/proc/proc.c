@@ -48,6 +48,8 @@
 #include <current.h>
 #include <addrspace.h>
 #include <vnode.h>
+#include <limits.h>
+#include <pid.h>
 
 /*
  * The process for the kernel; this holds all the kernel-only threads.
@@ -81,6 +83,14 @@ proc_create(const char *name)
 
 	/* VFS fields */
 	proc->p_cwd = NULL;
+
+	// /* initialize pid */
+	// if(curproc == NULL) {
+	// 	curproc->p_pid = 0;
+	// } else {
+	// 	pid_create(curproc->p_pid, &(proc->p_pid));
+	// }
+	pid_create(&(proc->p_pid));
 
 	return proc;
 }

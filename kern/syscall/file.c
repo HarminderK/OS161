@@ -7,9 +7,10 @@
 #include <current.h>
 #include <proc.h>
 #include <lib.h>
+#include <kern/errno.h>
 
- 
- /* initialize filetable */
+
+ /* initialize filetable */ 
 int filetable_init(struct filetable *ft) {
     
     // struct vnode *vn;
@@ -49,46 +50,6 @@ int filetable_init(struct filetable *ft) {
     if(res) {
         return res;
     }
-
-    // res = vfs_open(“con:”, O_RDONLY, 0, &vn);
-    // if(res){
-    //  vfs_close(vn);
-    //  return -1; // Error code
-    // }
-    // file_in->filename = “stdin”;
-    // file_in->flag = O_RDONLY;
-    // file_in->offset = 0;
-    // file_in->f_lock = lock_create(“stdin”);
-    // file_in->f_node = vn;
-    
-    
-    // // STDOUT
-    // vfs_open(“con:”, O_WRONLY, 0, &vn);
-    // if(res){
-    //  vfs_close(vn);
-    //  return -1; // Error code
-    // }
-    // file_in->filename = “stdout”;
-    // file_in->flag = O_WRONLY;
-    // file_in->offset = 0;
-    // file_in->f_lock = lock_create(“stdout”);
-    // file_in->f_node = vn;
-    
-    // // STDERR
-    // vfs_open(“con:”, O_WRONLY, 0, &vn);
-    // if(res){
-    //  vfs_close(vn);
-    //  return -1; // Error code
-    // }
-    // file_in->filename = “stderr”;
-    // file_in->flag = O_WRONLY;
-    // file_in->offset = 0;
-    // file_in->f_lock = lock_create(“stderr”);
-    // file_in->f_node = vn;
-
-    // filetable_add(ft, file_in);
-    // filetable_add(ft, file_out);
-    // filetable_add(ft, file_err);
     
     return 0;
 }
@@ -185,6 +146,32 @@ int file_destroy(struct file *file){
     lock_release(file->f_lock);
 	lock_destroy(file->f_lock);
 	kfree(file);
+    return 0;
+}
+
+/* copy current process's filetable */
+int filetable_copy(struct filetable **new_ft){
+    struct filetable *cur_ft = curproc-> p_filetable;
+
+    *new_ft = kmalloc(sizeof(struct filetable));
+    if(*new_ft == NULL) {
+        return ENOMEM;
+    }
+
+    (*new_ft)->ft_lock = lock_create("ft");
+    lock_acquire(cur_ft->ft_lock);
+    for(int i = 0; i < OPEN_MAX; i ++) {
+        if(cur_ft->files[i] != NULL) {
+            lock_acquire(cur_ft->files[i]->f_lock);
+            cur_ft->files[i]->f_refcount ++;
+            (*new_ft)->files[i] = cur_ft->files[i];
+            lock_release(cur_ft->files[i]->f_lock);
+        } else {
+            (*new_ft)->files[i] = NULL;
+        }
+        
+    }
+    lock_release(cur_ft->ft_lock);
     return 0;
 }
 

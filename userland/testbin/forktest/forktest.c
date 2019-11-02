@@ -172,6 +172,7 @@ main(int argc, char *argv[])
 	static const char expected[] =
 		"|----------------------------|\n";
 	int nowait=0;
+	// int nowait=1; //Without waitpid implemented
 
 	if (argc==2 && !strcmp(argv[1], "-w")) {
 		nowait=1;

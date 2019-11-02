@@ -50,7 +50,7 @@
 #include <test.h>
 #include <version.h>
 #include "autoconf.h"  // for pseudoconfig
-
+#include <pid.h>
 
 /*
  * These two pieces of data are maintained by the makefiles and build system.
@@ -107,6 +107,10 @@ boot(void)
 
 	/* Early initialization. */
 	ram_bootstrap();
+
+	/* initialize pid_manager */
+	pid_manager_init();
+	
 	proc_bootstrap();
 	thread_bootstrap();
 	hardclock_bootstrap();
@@ -138,6 +142,8 @@ boot(void)
 	 */
 	COMPILE_ASSERT(sizeof(userptr_t) == sizeof(char *));
 	COMPILE_ASSERT(sizeof(*(userptr_t)0) == sizeof(char));
+
+	
 }
 
 /*

@@ -34,6 +34,7 @@ int filetable_add( struct file **file, int *fd);
 int filetable_remove( int fd);
 int file_open(char *filename, int flags, mode_t mode, int *fd);
 int file_destroy(struct file *file);
+int filetable_copy(struct filetable **new_ft);
 
  
 #endif /* _FILE_H_ */

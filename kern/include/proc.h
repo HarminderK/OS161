@@ -38,12 +38,13 @@
 
 #include <spinlock.h>
 #include <thread.h> /* required for struct threadarray */
-
+#include <limits.h>
 //#include <file.h>
 
 struct addrspace;
 struct vnode;
 struct filetable;
+struct pid;
 
 /*
  * Process structure.
@@ -61,6 +62,9 @@ struct proc {
 
 	/* add more material here as needed */
 	struct filetable *p_filetable;
+
+	pid_t p_pid;
+	pid_t *p_children[PID_MAX];
 };
 
 /* This is the process structure for the kernel and for kernel-only threads. */

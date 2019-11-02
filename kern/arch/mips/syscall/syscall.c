@@ -36,7 +36,7 @@
 #include <current.h>
 #include <syscall.h>
 #include <copyinout.h>
-
+#include <addrspace.h>
 /*
  * System call dispatcher.
  *
@@ -149,6 +149,25 @@ syscall(struct trapframe *tf)
 		err = sys___getcwd((char *)tf->tf_a0, (size_t)tf->tf_a1, &retval);
 		break;
 
+		case SYS_fork:
+		err = sys_fork(tf, (pid_t *)&retval);
+		break;
+
+		case SYS_getpid:
+		err = sys_getpid((pid_t *)&retval);
+		break;
+
+		case SYS_waitpid:
+		err = sys_waitpid((pid_t)tf->tf_a0, (int *)tf->tf_a1, (int) tf->tf_a2, &retval);
+		break;
+
+		case SYS__exit:
+		err = sys__exit((int) tf->tf_a0);
+		break;
+
+		case SYS_execv:
+		err = sys_execv((const char *)tf->tf_a0, (char **) tf->tf_a1);
+		break;
 
 
 	    default:
@@ -196,7 +215,13 @@ syscall(struct trapframe *tf)
  * Thus, you can trash it and do things another way if you prefer.
  */
 void
-enter_forked_process(struct trapframe *tf)
+enter_forked_process(void *cur_tf, unsigned long num)
 {
-	(void)tf;
+	(void) num;
+	struct trapframe tf = *(struct trapframe *) cur_tf;
+	tf.tf_v0 = 0;
+	tf.tf_a3 = 0;
+	tf.tf_epc += 4;
+	as_activate();
+	mips_usermode(&tf);
 }

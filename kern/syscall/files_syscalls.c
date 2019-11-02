@@ -55,9 +55,7 @@ int sys_read(int fd, void *buf, size_t buflen, int *retval) {
         return EBADF;
 	}
 
-    lock_acquire(curproc->p_filetable->ft_lock);
     file = curproc->p_filetable->files[fd];
-    lock_release(curproc->p_filetable->ft_lock);
 
     if (file == NULL) {
         return EBADF;
@@ -91,9 +89,7 @@ int sys_write(int fd, void *buf, size_t buflen, int *retval) {
         return EBADF;
 	}
 
-    lock_acquire(curproc->p_filetable->ft_lock);
     file = curproc->p_filetable->files[fd];
-    lock_release(curproc->p_filetable->ft_lock);
     if (file == NULL) {
         return EBADF;
     }
@@ -110,9 +106,8 @@ int sys_write(int fd, void *buf, size_t buflen, int *retval) {
         return res;
     }
     file->offset = uio.uio_offset;
-    lock_release(file->f_lock);
-
     *retval = buflen - uio.uio_resid;
+    lock_release(file->f_lock);
     return 0;
 }
 

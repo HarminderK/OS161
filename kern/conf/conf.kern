@@ -377,6 +377,8 @@ file      syscall/loadelf.c
 file      syscall/runprogram.c
 file      syscall/time_syscalls.c
 file      syscall/files_syscalls.c
+file      syscall/proc_syscall.c
+file      syscall/pid.c
 file      syscall/file.c
 
 #

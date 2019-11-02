@@ -45,6 +45,7 @@
 #include <syscall.h>
 #include <test.h>
 #include <file.h>
+#include <pid.h>
 
 /*
  * Load program "progname" and start running it in usermode.
@@ -68,6 +69,7 @@ runprogram(char *progname)
 
 	/* initialize filetable */
 	filetable_init(curproc->p_filetable);
+
 
 	/* We should be a new process. */
 	KASSERT(proc_getas() == NULL);
