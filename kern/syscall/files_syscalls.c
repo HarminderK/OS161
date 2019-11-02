@@ -13,6 +13,8 @@
 #include <stat.h>
 #include <kern/fcntl.h>
 
+
+/*For opening, opens a file with flags, most work are done by file_open*/
 int sys_open(const char *filename, int flags, mode_t mode, int *retval) {
     int res;
     char dest[PATH_MAX];
@@ -27,6 +29,7 @@ int sys_open(const char *filename, int flags, mode_t mode, int *retval) {
     return 0;
 }
 
+/* Closes a file, call filetable_remove */
 int sys_close(int fd) {
     struct file *file;
     int res;
@@ -45,6 +48,7 @@ int sys_close(int fd) {
     return res;
 }
 
+/* Reads a file, returns corresponding error number */
 int sys_read(int fd, void *buf, size_t buflen, int *retval) {
     struct iovec iovec;
     struct uio uio;
@@ -79,6 +83,7 @@ int sys_read(int fd, void *buf, size_t buflen, int *retval) {
     return 0;
 }
 
+/* Writes to a file, returns corresponding error number */
 int sys_write(int fd, void *buf, size_t buflen, int *retval) {
     struct iovec iovec;
     struct uio uio;

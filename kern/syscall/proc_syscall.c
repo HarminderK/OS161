@@ -10,6 +10,9 @@
 #include <current.h>
 #include <limits.h>
 #include <kern/wait.h>
+#include <copyinout.h>
+#include <vfs.h>
+#include <kern/fcntl.h>
 
 struct trapframe;
 
@@ -79,7 +82,8 @@ int sys_waitpid(pid_t pid, int *status, int options, pid_t *retval){
     for( int i = 0; i < PID_MAX; i++){
         if(curproc->p_children[i] == NULL) {
             break;
-        } else (curproc->p_children[i] == pid) {
+        }  
+        if (*(curproc->p_children[i]) == pid) {
             isChild = true;
             break;
         }
@@ -111,14 +115,14 @@ void
 sys__exit (int exitcode) {
     struct pid *pid = pid_get(curproc->p_pid);
     
-    pid_t *t_pid;
+    pid_t t_pid = -1;
     exitcode = _MKWAIT_EXIT(exitcode);
     pid->exited = true;
     pid->exit_status = exitcode;
     int i;
     for(i = 0; i < PID_MAX; i++){
         if(curproc->p_children[i] != NULL){
-            sys_waitpid(curproc->p_children[i], &exitcode, 0, t_pid);
+            sys_waitpid(*(curproc->p_children[i]), &exitcode, 0, &t_pid);
             curproc->p_children[i] = NULL;
         } else{
             break;
