@@ -36,21 +36,27 @@ int sys_fork(struct trapframe *tf, pid_t *retval) {
     }
 
     new_tf = kmalloc(sizeof(struct trapframe));
+    if(new_tf == NULL) {
+        return ENOMEM;
+    }
     /* copy trapframe */
-    memcpy(new_tf, tf, sizeof(*new_tf));
-    res = thread_fork("new thread", new_proc, &enter_forked_process, new_tf, 0);
-    if(res) {
-        return res;
-    }
-    *retval = new_proc->p_pid;
-    if(retval == NULL) {
-        return ENPROC;
-    }
+    *new_tf = *tf;
+
     for( int i = 0; i < PID_MAX; i++){
         if(curproc->p_children[i] == NULL){
             curproc->p_children[i] = &(new_proc->p_pid);
             break;
         }
+    }
+
+    res = thread_fork("new thread", new_proc, &enter_forked_process, new_tf, 0);
+    if(res) {
+        return res;
+    }
+
+    *retval = new_proc->p_pid;
+    if(retval == NULL) {
+        return ENPROC;
     }
     return 0;
 }
@@ -124,13 +130,13 @@ sys__exit (int exitcode) {
         if(curproc->p_children[i] != NULL){
             sys_waitpid(*(curproc->p_children[i]), &exitcode, 0, &t_pid);
             curproc->p_children[i] = NULL;
-        } else{
-            break;
-        }
+        } 
     }
     lock_acquire(pid->pid_lock);
     cv_signal(pid->pid_cv, pid->pid_lock);
     lock_release(pid->pid_lock);
+    thread_exit();
+    proc_destroy(curproc);
 }
 
 int

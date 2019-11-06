@@ -50,6 +50,7 @@
 #include <vnode.h>
 #include <limits.h>
 #include <pid.h>
+#include <file.h>
 
 /*
  * The process for the kernel; this holds all the kernel-only threads.
@@ -175,6 +176,9 @@ proc_destroy(struct proc *proc)
 		as_destroy(as);
 	}
 
+	/* Clear memory assigned */
+	filetable_destroy(proc->p_filetable);
+	
 	threadarray_cleanup(&proc->p_threads);
 	spinlock_cleanup(&proc->p_lock);
 

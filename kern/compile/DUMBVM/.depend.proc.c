@@ -10,4 +10,4 @@ proc.o: ../../proc/proc.c ../../include/types.h \
  ../../include/current.h includelinks/machine/current.h \
  ../../include/addrspace.h ../../include/vm.h includelinks/machine/vm.h \
  opt-dumbvm.h ../../include/vnode.h ../../include/pid.h \
- ../../include/synch.h
+ ../../include/synch.h ../../include/file.h
