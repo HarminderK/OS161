@@ -86,10 +86,6 @@ return 0;
 /* Destroy a filetable */
 int filetable_destroy(struct filetable *ft) {
     (void) ft;
-	int i;
-	for(i = 0; i < OPEN_MAX; i++){
-		filetable_remove(i);
-	}
 	lock_destroy(curproc->p_filetable->ft_lock);
 	kfree(curproc->p_filetable);
 	return 0;

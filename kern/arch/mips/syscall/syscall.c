@@ -219,6 +219,7 @@ enter_forked_process(void *cur_tf, unsigned long num)
 {
 	(void) num;
 	struct trapframe tf = *(struct trapframe *) cur_tf;
+	kfree((struct trapframe *) cur_tf);
 	tf.tf_v0 = 0;
 	tf.tf_a3 = 0;
 	tf.tf_epc += 4;

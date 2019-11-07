@@ -398,7 +398,7 @@ proc.o: ../../proc/proc.c ../../include/types.h \
  ../../include/current.h includelinks/machine/current.h \
  ../../include/addrspace.h ../../include/vm.h includelinks/machine/vm.h \
  opt-dumbvm.h ../../include/vnode.h ../../include/pid.h \
- ../../include/synch.h
+ ../../include/synch.h ../../include/file.h
 file.o: ../../syscall/file.c ../../include/file.h ../../include/types.h \
  ../../include/kern/types.h includelinks/kern/machine/types.h \
  includelinks/machine/types.h ../../include/synch.h \
@@ -462,7 +462,8 @@ proc_syscall.o: ../../syscall/proc_syscall.c ../../include/types.h \
  ../../include/addrspace.h ../../include/vm.h includelinks/machine/vm.h \
  opt-dumbvm.h includelinks/mips/trapframe.h ../../include/file.h \
  ../../include/vnode.h ../../include/kern/errno.h ../../include/current.h \
- includelinks/machine/current.h ../../include/kern/wait.h
+ includelinks/machine/current.h ../../include/kern/wait.h \
+ ../../include/copyinout.h ../../include/vfs.h ../../include/kern/fcntl.h
 runprogram.o: ../../syscall/runprogram.c ../../include/types.h \
  ../../include/kern/types.h includelinks/kern/machine/types.h \
  includelinks/machine/types.h ../../include/kern/errno.h \
