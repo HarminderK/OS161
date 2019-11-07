@@ -189,16 +189,17 @@ int sys_execv(const char *program, char **args)
         return ENOENT;
     }
 
-    int res;
-    char dest[PATH_MAX];
-    res = copyinstr((const_userptr_t)program, dest, PATH_MAX, NULL);
-    if (res)
-    {
-        return res;
+    if(strlen((char *)program) > PATH_MAX){
+        return E2BIG;
     }
 
-    struct vnode *vn;
-    res = vfs_open(dest, O_RDONLY, 0, &vn);
+    int res;
+    char *dest;
+    dest = kstrdup((char *) program);
+    // res = copyinstr((const_userptr_t) program, dest, PATH_MAX, NULL);
+    if (dest == NULL) {
+        return ENOMEM;
+    }
 
     int argc = 0;
     while (args[argc] != NULL)
@@ -211,23 +212,23 @@ int sys_execv(const char *program, char **args)
     {
         return ENOMEM;
     }
-
     int i;
-    for (i = 0; i < argc; i++)
-    {
-        argv[i] = kmalloc(sizeof(char) * PATH_MAX);
-        res = copyinstr((const_userptr_t)args[i], argv[i], PATH_MAX, NULL);
-        if (res)
-        {
-            for (i = 0; i < argc; i++)
-            {
+    for(i = 0; i <= argc; i++){
+        argv[i] = NULL;
+    }
+    
+    for(i = 0; i < argc; i++){
+        size_t len = sizeof(char)*(strlen(args[i]) + 1); // Plus the NULL terminator
+        argv[i] = kmalloc(len); 
+        res = copyinstr((const_userptr_t) args[i], argv[i], len, NULL);
+        if (res) {
+            for(i = 0; i < argc; i++){
                 kfree(argv[i]);
             }
             kfree(argv);
             return res;
         }
     }
-    argv[argc] = NULL;
 
     // Get a new address space
     struct addrspace *as = as_create();
@@ -243,10 +244,13 @@ int sys_execv(const char *program, char **args)
     }
 
     // Switch to the new address space
+    as_deactivate();
     struct addrspace *old_as = proc_setas(as);
-    // as_activate(as);
+    as_activate();
 
     // Load a new executable
+    struct vnode *vn;
+    res = vfs_open(dest, O_RDONLY, 0, &vn);
     vaddr_t entrypoint;
     res = load_elf(vn, &entrypoint);
     if (res)
@@ -256,7 +260,7 @@ int sys_execv(const char *program, char **args)
             kfree(argv[i]);
         }
         kfree(argv);
-        // as_deactivate();
+        as_deactivate();
         as = proc_setas(old_as);
         as_destroy(as);
         vfs_close(vn);
@@ -274,40 +278,44 @@ int sys_execv(const char *program, char **args)
             kfree(argv[i]);
         }
         kfree(argv);
-        // as_deactivate();
+        as_deactivate();
         as = proc_setas(old_as);
         as_destroy(as);
         return ENOMEM;
     }
-
+    size_t len;
     // Copy the arguments to the new address space, properly arranging them
-    userptr_t *userargvptr = (userptr_t *)stackptr;
-
-    // Copyout the arg pointers -- garbage values for now (except the NULL Addr)
-    size_t len = sizeof(char *) * (argc + 1); // Plus the NULL addr
-    stackptr -= len;
-    copyout(argv, (userptr_t)stackptr, len);
-
-    // Copyout the arg values and update the user arg pointer addr
-    for (i = 0; i < argc; i++)
-    {
+    // userptr_t *userargvptr = (userptr_t *) stackptr;
+    vaddr_t userargvptr[argc];
+    userargvptr[argc] = 0;
+    size_t aligned;
+    for(i = argc - 1; i >= 0; i--){
         len = sizeof(char) * (strlen(argv[i]) + 1); // Plus null terminator '\0'
-        stackptr -= len;
-        userargvptr[i] = (userptr_t)stackptr;
-        copyoutstr(argv[i], userargvptr[i], len, NULL);
+        aligned = ROUNDUP(len,4);
+        stackptr -= aligned;
+        userargvptr[i] = stackptr;
+        copyoutstr(argv[i], (userptr_t) userargvptr[i], aligned, &len);
     }
 
-    // Clean up the old address space,
-    for (i = 0; i < argc; i++)
-    {
+    len = sizeof(vaddr_t);
+    stackptr -= len;
+    copyout(NULL, (userptr_t) stackptr, len);
+    for(i = argc - 1; i >= 0; i--){
+        stackptr -= len;
+        copyout(&userargvptr[i], (userptr_t) stackptr, len);
+    }
+
+    vaddr_t userspaceAddr = stackptr;
+
+    // Clean up the old address space, 
+    for(i = 0; i < argc; i++){
         kfree(argv[i]);
     }
     kfree(argv);
-    as_activate();
-
+    as_destroy(old_as);
     // Warp to user mode
-    enter_new_process(argc, (userptr_t)userargvptr, NULL, stackptr, entrypoint);
-
+    enter_new_process(argc, (userptr_t) userspaceAddr, NULL, (vaddr_t) stackptr, entrypoint);
+    
     // Come back to the old address space if exec fails
     as_deactivate();
     as = proc_setas(old_as);
