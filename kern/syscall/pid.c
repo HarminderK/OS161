@@ -62,5 +62,9 @@ int pid_destroy(pid_t pid) {
 
 /* return the pid struct given a pid*/
 struct pid* pid_get(pid_t pid) {
-    return pid_manager->procs[(int)pid];
+    struct pid * cur_pid;
+    lock_acquire(pid_manager->pm_lock);
+    cur_pid = pid_manager->procs[(int)pid];
+    lock_release(pid_manager->pm_lock);
+    return cur_pid;
 }

@@ -4,10 +4,10 @@ proc.o: ../../proc/proc.c ../../include/types.h \
  ../../include/proc.h ../../include/spinlock.h \
  includelinks/machine/spinlock.h ../../include/thread.h \
  ../../include/array.h ../../include/lib.h opt-noasserts.h \
- ../../include/threadlist.h includelinks/machine/thread.h \
- ../../include/setjmp.h includelinks/kern/machine/setjmp.h \
+ ../../include/threadlist.h ../../include/pid.h ../../include/synch.h \
  ../../include/limits.h ../../include/kern/limits.h \
- ../../include/current.h includelinks/machine/current.h \
- ../../include/addrspace.h ../../include/vm.h includelinks/machine/vm.h \
- opt-dumbvm.h ../../include/vnode.h ../../include/pid.h \
- ../../include/synch.h ../../include/file.h
+ includelinks/machine/thread.h ../../include/setjmp.h \
+ includelinks/kern/machine/setjmp.h ../../include/current.h \
+ includelinks/machine/current.h ../../include/addrspace.h \
+ ../../include/vm.h includelinks/machine/vm.h opt-dumbvm.h \
+ ../../include/vnode.h ../../include/file.h

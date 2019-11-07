@@ -7,10 +7,10 @@ lamebus_machdep.o: ../../arch/sys161/dev/lamebus_machdep.c \
  ../../include/spinlock.h includelinks/machine/spinlock.h \
  ../../include/threadlist.h includelinks/machine/vm.h ../../include/spl.h \
  ../../include/clock.h ../../include/kern/time.h opt-synchprobs.h \
- ../../include/thread.h ../../include/array.h \
+ ../../include/thread.h ../../include/array.h ../../include/pid.h \
+ ../../include/synch.h ../../include/limits.h ../../include/kern/limits.h \
  includelinks/machine/thread.h ../../include/setjmp.h \
  includelinks/kern/machine/setjmp.h ../../include/current.h \
  includelinks/machine/current.h ../../include/membar.h \
- includelinks/machine/membar.h ../../include/synch.h \
- ../../include/mainbus.h includelinks/sys161/bus.h \
- ../../dev/lamebus/lamebus.h autoconf.h
+ includelinks/machine/membar.h ../../include/mainbus.h \
+ includelinks/sys161/bus.h ../../dev/lamebus/lamebus.h autoconf.h

@@ -4,5 +4,7 @@ thread_machdep.o: ../../arch/mips/thread/thread_machdep.c \
  ../../include/lib.h ../../include/cdefs.h opt-noasserts.h \
  ../../include/thread.h ../../include/array.h ../../include/spinlock.h \
  includelinks/machine/spinlock.h ../../include/threadlist.h \
- includelinks/machine/thread.h ../../include/setjmp.h \
- includelinks/kern/machine/setjmp.h ../../include/threadprivate.h
+ ../../include/pid.h ../../include/synch.h ../../include/limits.h \
+ ../../include/kern/limits.h includelinks/machine/thread.h \
+ ../../include/setjmp.h includelinks/kern/machine/setjmp.h \
+ ../../include/threadprivate.h

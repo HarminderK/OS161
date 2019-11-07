@@ -5,7 +5,8 @@ fstest.o: ../../test/fstest.c ../../include/types.h \
  opt-noasserts.h ../../include/uio.h ../../include/kern/iovec.h \
  ../../include/thread.h ../../include/array.h ../../include/spinlock.h \
  includelinks/machine/spinlock.h ../../include/threadlist.h \
- includelinks/machine/thread.h ../../include/setjmp.h \
- includelinks/kern/machine/setjmp.h ../../include/synch.h \
+ ../../include/pid.h ../../include/synch.h ../../include/limits.h \
+ ../../include/kern/limits.h includelinks/machine/thread.h \
+ ../../include/setjmp.h includelinks/kern/machine/setjmp.h \
  ../../include/vfs.h ../../include/fs.h ../../include/vnode.h \
  ../../include/test.h

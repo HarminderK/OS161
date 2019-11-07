@@ -45,6 +45,7 @@ struct addrspace;
 struct vnode;
 struct filetable;
 struct pid;
+struct lock;
 
 /*
  * Process structure.
@@ -64,6 +65,8 @@ struct proc {
 	struct filetable *p_filetable;
 
 	pid_t p_pid;
+
+	struct lock *p_child_lock;
 	pid_t *p_children[PID_MAX];
 };
 
