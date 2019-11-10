@@ -51,6 +51,7 @@
 #include <limits.h>
 #include <pid.h>
 #include <file.h>
+#include <synch.h>
 
 /*
  * The process for the kernel; this holds all the kernel-only threads.
@@ -85,13 +86,9 @@ proc_create(const char *name)
 	/* VFS fields */
 	proc->p_cwd = NULL;
 
-	// /* initialize pid */
-	// if(curproc == NULL) {
-	// 	curproc->p_pid = 0;
-	// } else {
-	// 	pid_create(curproc->p_pid, &(proc->p_pid));
-	// }
+	/* initialize pid */
 	pid_create(&(proc->p_pid));
+	proc->p_child_lock = lock_create("p_child_lock");
 
 	return proc;
 }
@@ -177,8 +174,13 @@ proc_destroy(struct proc *proc)
 	}
 
 	/* Clear memory assigned */
-	filetable_destroy(proc->p_filetable);
-	
+	if(proc->p_filetable) {
+		filetable_destroy(proc->p_filetable);
+	}
+	/* destroy proc lock */
+	if(proc->p_child_lock) {
+		lock_destroy(proc->p_child_lock);
+	}
 	threadarray_cleanup(&proc->p_threads);
 	spinlock_cleanup(&proc->p_lock);
 

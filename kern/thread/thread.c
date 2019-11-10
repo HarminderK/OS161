@@ -50,6 +50,7 @@
 #include <addrspace.h>
 #include <mainbus.h>
 #include <vnode.h>
+#include <pid.h>
 
 #include "opt-synchprobs.h"
 
@@ -156,7 +157,7 @@ thread_create(const char *name)
 	thread->t_iplhigh_count = 1; /* corresponding to t_curspl */
 
 	/* If you add to struct thread, be sure to initialize here */
-
+	
 	return thread;
 }
 
@@ -792,7 +793,6 @@ thread_exit(void)
 	struct thread *cur;
 
 	cur = curthread;
-
 	/*
 	 * Detach from our process. You might need to move this action
 	 * around, depending on how your wait/exit works.
@@ -804,6 +804,36 @@ thread_exit(void)
 
 	/* Check the stack guard band. */
 	thread_checkstack(cur);
+
+
+	/* Interrupts off on this processor */
+        splhigh();
+	thread_switch(S_ZOMBIE, NULL, NULL);
+	panic("braaaaaaaiiiiiiiiiiinssssss\n");
+}
+
+/* Thread_exit for sys_exit */
+void sys_exit_helper(void)
+{
+	struct thread *cur;
+
+	cur = curthread;
+	struct proc *cur_p = curproc;
+	/*
+	 * Detach from our process. You might need to move this action
+	 * around, depending on how your wait/exit works.
+	 */
+	proc_remthread(cur);
+
+	/* Destroy current process */
+	proc_destroy(cur_p);
+
+	/* Make sure we *are* detached (move this only if you're sure!) */
+	KASSERT(cur->t_proc == NULL);
+
+	/* Check the stack guard band. */
+	thread_checkstack(cur);
+
 
 	/* Interrupts off on this processor */
         splhigh();

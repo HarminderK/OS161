@@ -40,6 +40,8 @@
 #include <spinlock.h>
 #include <threadlist.h>
 
+#include <pid.h>
+
 struct cpu;
 
 /* get machine-dependent defs */
@@ -149,6 +151,8 @@ int thread_fork(const char *name, struct proc *proc,
  * Interrupts need not be disabled.
  */
 __DEAD void thread_exit(void);
+
+void sys_exit_helper(void);
 
 /*
  * Cause the current thread to yield to the next runnable thread, but
