@@ -144,7 +144,6 @@ common_prog(int nargs, char **args)
 	int status;
 	int retval;
 	sys_waitpid(proc->p_pid, &status, 0, &retval);
-	kprintf("Program Exited!");
 	return 0;
 }
 

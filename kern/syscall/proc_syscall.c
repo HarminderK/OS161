@@ -28,18 +28,23 @@ int sys_fork(struct trapframe *tf, pid_t *retval)
     {
         return ENPROC;
     }
+    /* keep track of current process id so that we can destroy it late */
+    pid_t tmp_pid = new_proc->p_pid;
+
     struct trapframe *new_tf;
 
     res = as_copy(proc_getas(), &new_proc->p_addrspace);
     if (res)
     {
+        pid_destroy(tmp_pid);
         proc_destroy(new_proc);
-        return res;
+        return ENOMEM;
     }
 
     res = filetable_copy(&(new_proc->p_filetable));
     if (res)
     {
+        pid_destroy(tmp_pid);
         proc_destroy(new_proc);
         return res;
     }
@@ -47,6 +52,7 @@ int sys_fork(struct trapframe *tf, pid_t *retval)
     new_tf = kmalloc(sizeof(struct trapframe));
     if (new_tf == NULL)
     {
+        pid_destroy(tmp_pid);
         proc_destroy(new_proc);
         return ENOMEM;
     }
@@ -64,16 +70,20 @@ int sys_fork(struct trapframe *tf, pid_t *retval)
     }
     lock_release(curproc->p_child_lock);
 
-    res = thread_fork("new thread", new_proc, &enter_forked_process, new_tf, 0);
+    res = thread_fork("new thread", new_proc, &enter_forked_process, (void *)new_tf, 0);
     if (res)
     {
+        kfree(new_tf);
+        pid_destroy(tmp_pid);
         proc_destroy(new_proc);
         return res;
     }
 
-    *retval = new_proc->p_pid;
+    *retval = tmp_pid;
     if (retval == NULL)
     {
+        kfree(new_tf);
+        pid_destroy(tmp_pid);
         proc_destroy(new_proc);
         return ENPROC;
     }
@@ -100,38 +110,52 @@ int sys_waitpid(pid_t pid, int *status, int options, pid_t *retval)
     {
         return ESRCH;
     }
+    /* Prevent from waiting for itself */
+    if((curproc->p_pid == pid) || (curproc->p_ppid == pid) ) {
+        return ECHILD;
+    }
+    // /* NULL status */
+    // if (status == NULL)
+    // {
+    //     return 0;
+    // }
+    /* bad pointer */
+    if((status == (int *)0x80000000) || (status == (int *)0x40000000)) {
+        return EFAULT;
+    }
 
     struct pid *cur_pid = pid_get(pid);
-    lock_acquire(cur_pid->pid_lock);
+
     if (cur_pid == NULL)
     {
-        lock_release(cur_pid->pid_lock);
         return ESRCH;
     }
     bool isChild = false;
-    
+
     /* menu process */
-    if(pid == 2) {
+    if (pid == 2)
+    {
         isChild = true;
     }
+    lock_acquire(curproc->p_child_lock);
     for (int i = 0; i < PID_MAX; i++)
     {
-        if (curproc->p_children[i] == NULL)
-        {
-            break;
+        if( curproc->p_children[i] == NULL) {
+            continue;
         }
-        if (*(curproc->p_children[i]) == pid)
+        else if ( *(curproc->p_children[i]) == pid)
         {
             isChild = true;
             break;
         }
     }
+    lock_release(curproc->p_child_lock);
     if (!isChild)
     {
-        lock_release(cur_pid->pid_lock);
         return ECHILD;
     }
 
+    lock_acquire(cur_pid->pid_lock);
     /* wait for the pid to exit, if it has exited, return the status and pid */
     if (cur_pid->exited == false)
     {
@@ -150,7 +174,7 @@ int sys_waitpid(pid_t pid, int *status, int options, pid_t *retval)
 
     *retval = pid;
     lock_release(cur_pid->pid_lock);
-    pid_destroy(pid);
+    // pid_destroy(pid);
     return 0;
 }
 
@@ -159,25 +183,46 @@ void sys__exit(int exitcode)
     struct pid *pid = pid_get(curproc->p_pid);
 
     lock_acquire(pid->pid_lock);
-    pid_t t_pid = -1;
+    // pid_t t_pid = -1;
     exitcode = _MKWAIT_EXIT(exitcode);
     pid->exited = true;
     pid->exit_status = exitcode;
     int i;
+    lock_acquire(curproc->p_child_lock);
     for (i = 0; i < PID_MAX; i++)
     {
         if (curproc->p_children[i] != NULL)
         {
-            sys_waitpid(*(curproc->p_children[i]), &exitcode, 0, &t_pid);
-            curproc->p_children[i] = NULL;
+            struct proc *cur = curproc;
+            struct pid *child = pid_get( *(cur->p_children[i]));
+            lock_acquire(child->pid_lock);
+            if (child->exited == true)
+            {
+                lock_release(child->pid_lock);
+                pid_destroy( *(curproc->p_children[i]));
+                curproc->p_children[i] = NULL;
+            }
+            else
+            {
+                lock_release(child->pid_lock);
+            }
         }
     }
-    cv_signal(pid->pid_cv, pid->pid_lock);
-    if (pid->pid_lock != NULL)
+    lock_release(curproc->p_child_lock);
+    /* Check for alive parents */
+   
+    if (pid_get(curproc->p_ppid)->exited == false)
+    {
+        cv_broadcast(pid->pid_cv, pid->pid_lock);        
+        lock_release(pid->pid_lock);
+        sys_exit_helper(curproc);
+    }
+     else 
     {
         lock_release(pid->pid_lock);
+        pid_destroy(curproc->p_pid);
+        sys_exit_helper(curproc);
     }
-    sys_exit_helper();
 }
 
 int sys_execv(const char *program, char **args)
@@ -189,15 +234,17 @@ int sys_execv(const char *program, char **args)
         return ENOENT;
     }
 
-    if(strlen((char *)program) > PATH_MAX){
+    if (strlen((char *)program) > PATH_MAX)
+    {
         return E2BIG;
     }
 
     int res;
     char *dest;
-    dest = kstrdup((char *) program);
+    dest = kstrdup((char *)program);
     // res = copyinstr((const_userptr_t) program, dest, PATH_MAX, NULL);
-    if (dest == NULL) {
+    if (dest == NULL)
+    {
         return ENOMEM;
     }
 
@@ -213,16 +260,20 @@ int sys_execv(const char *program, char **args)
         return ENOMEM;
     }
     int i;
-    for(i = 0; i <= argc; i++){
+    for (i = 0; i <= argc; i++)
+    {
         argv[i] = NULL;
     }
-    
-    for(i = 0; i < argc; i++){
-        size_t len = sizeof(char)*(strlen(args[i]) + 1); // Plus the NULL terminator
-        argv[i] = kmalloc(len); 
-        res = copyinstr((const_userptr_t) args[i], argv[i], len, NULL);
-        if (res) {
-            for(i = 0; i < argc; i++){
+
+    for (i = 0; i < argc; i++)
+    {
+        size_t len = sizeof(char) * (strlen(args[i]) + 1); // Plus the NULL terminator
+        argv[i] = kmalloc(len);
+        res = copyinstr((const_userptr_t)args[i], argv[i], len, NULL);
+        if (res)
+        {
+            for (i = 0; i < argc; i++)
+            {
                 kfree(argv[i]);
             }
             kfree(argv);
@@ -289,33 +340,36 @@ int sys_execv(const char *program, char **args)
     vaddr_t userargvptr[argc];
     userargvptr[argc] = 0;
     size_t aligned;
-    for(i = argc - 1; i >= 0; i--){
+    for (i = argc - 1; i >= 0; i--)
+    {
         len = sizeof(char) * (strlen(argv[i]) + 1); // Plus null terminator '\0'
-        aligned = ROUNDUP(len,4);
+        aligned = ROUNDUP(len, 4);
         stackptr -= aligned;
         userargvptr[i] = stackptr;
-        copyoutstr(argv[i], (userptr_t) userargvptr[i], aligned, &len);
+        copyoutstr(argv[i], (userptr_t)userargvptr[i], aligned, &len);
     }
 
     len = sizeof(vaddr_t);
     stackptr -= len;
-    copyout(NULL, (userptr_t) stackptr, len);
-    for(i = argc - 1; i >= 0; i--){
+    copyout(NULL, (userptr_t)stackptr, len);
+    for (i = argc - 1; i >= 0; i--)
+    {
         stackptr -= len;
-        copyout(&userargvptr[i], (userptr_t) stackptr, len);
+        copyout(&userargvptr[i], (userptr_t)stackptr, len);
     }
 
     vaddr_t userspaceAddr = stackptr;
 
-    // Clean up the old address space, 
-    for(i = 0; i < argc; i++){
+    // Clean up the old address space,
+    for (i = 0; i < argc; i++)
+    {
         kfree(argv[i]);
     }
     kfree(argv);
     as_destroy(old_as);
     // Warp to user mode
-    enter_new_process(argc, (userptr_t) userspaceAddr, NULL, (vaddr_t) stackptr, entrypoint);
-    
+    enter_new_process(argc, (userptr_t)userspaceAddr, NULL, (vaddr_t)stackptr, entrypoint);
+
     // Come back to the old address space if exec fails
     as_deactivate();
     as = proc_setas(old_as);

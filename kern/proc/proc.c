@@ -77,6 +77,22 @@ proc_create(const char *name)
 		return NULL;
 	}
 
+	/* initialize pid */
+	int res = pid_create(&(proc->p_pid));
+	if(res) {
+		kfree(proc);
+		kfree(proc->p_name);
+		return NULL;
+	}
+	if(proc->p_pid != 1) {
+		proc->p_ppid = curproc->p_pid;
+	}
+
+	proc->p_child_lock = lock_create("p_child_lock");
+	for (int i = 0; i < PID_MAX; i++){
+        proc->p_children[i] = NULL;
+    }
+
 	threadarray_init(&proc->p_threads);
 	spinlock_init(&proc->p_lock);
 
@@ -86,9 +102,6 @@ proc_create(const char *name)
 	/* VFS fields */
 	proc->p_cwd = NULL;
 
-	/* initialize pid */
-	pid_create(&(proc->p_pid));
-	proc->p_child_lock = lock_create("p_child_lock");
 
 	return proc;
 }

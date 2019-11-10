@@ -152,7 +152,7 @@ int thread_fork(const char *name, struct proc *proc,
  */
 __DEAD void thread_exit(void);
 
-void sys_exit_helper(void);
+void sys_exit_helper(struct proc *cur_p);
 
 /*
  * Cause the current thread to yield to the next runnable thread, but

@@ -44,7 +44,7 @@ int sys_close(int fd) {
         return EBADF;
     }
 
-    res = filetable_remove(fd);
+    res = filetable_remove(fd, curproc->p_filetable);
     return res;
 }
 

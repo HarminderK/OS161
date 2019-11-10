@@ -65,6 +65,7 @@ struct proc {
 	struct filetable *p_filetable;
 
 	pid_t p_pid;
+	pid_t p_ppid;
 
 	struct lock *p_child_lock;
 	pid_t *p_children[PID_MAX];

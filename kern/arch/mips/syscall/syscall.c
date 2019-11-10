@@ -162,7 +162,9 @@ syscall(struct trapframe *tf)
 		break;
 
 		case SYS__exit:
+		err = 0;
 		sys__exit((int) tf->tf_a0);
+		panic("Exit return!!!\n");
 		break;
 
 		case SYS_execv:
@@ -219,10 +221,11 @@ enter_forked_process(void *cur_tf, unsigned long num)
 {
 	(void) num;
 	struct trapframe tf = *(struct trapframe *) cur_tf;
-	kfree((struct trapframe *) cur_tf);
+	kfree(cur_tf);
 	tf.tf_v0 = 0;
 	tf.tf_a3 = 0;
 	tf.tf_epc += 4;
+	/* TODO: activate befoe enter forked process */
 	as_activate();
 	mips_usermode(&tf);
 }

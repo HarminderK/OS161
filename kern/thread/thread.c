@@ -813,16 +813,17 @@ thread_exit(void)
 }
 
 /* Thread_exit for sys_exit */
-void sys_exit_helper(void)
+void sys_exit_helper(struct proc *cur_p)
 {
 	struct thread *cur;
 
 	cur = curthread;
-	struct proc *cur_p = curproc;
 	/*
 	 * Detach from our process. You might need to move this action
 	 * around, depending on how your wait/exit works.
 	 */
+	// int num = threadarray_num(&cur_p->p_threads);
+
 	proc_remthread(cur);
 
 	/* Destroy current process */

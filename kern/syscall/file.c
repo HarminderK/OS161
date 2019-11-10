@@ -55,19 +55,19 @@ int filetable_init(struct filetable *ft) {
 }
  
 /* removes a file from filetable */
-int filetable_remove(int fd) {
+int filetable_remove(int fd, struct filetable *ft) {
 	if(fd >= OPEN_MAX || fd < 0) {
 		return -1; // Index out of bound;
 	}
-	lock_acquire(curproc->p_filetable->ft_lock);
-	struct file *file = curproc->p_filetable->files[fd];
+	lock_acquire(ft->ft_lock);
+	struct file *file = ft->files[fd];
 	
 	if(file == NULL ){
-		lock_release(curproc->p_filetable->ft_lock);
+		lock_release(ft->ft_lock);
                         return -1;
 	}
-	curproc->p_filetable->files[fd] = NULL;
-    lock_release(curproc->p_filetable->ft_lock);
+	ft->files[fd] = NULL;
+    lock_release(ft->ft_lock);
 
     lock_acquire(file->f_lock);
     if(file->f_refcount > 1){
@@ -86,6 +86,9 @@ return 0;
 /* Destroy a filetable */
 int filetable_destroy(struct filetable *ft) {
     (void) ft;
+    for(int i = 0; i < OPEN_MAX; i++){
+		filetable_remove(i, ft);
+	}
 	lock_destroy(ft->ft_lock);
 	kfree(ft);
 	return 0;

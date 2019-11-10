@@ -22,10 +22,8 @@ struct pid {
 /*
 	Init under run program
 */
-struct pid_manager {
     struct pid *procs[PID_MAX];
     struct lock *pm_lock;
-};
 
 /* initialize pid_manager */
 int pid_manager_init(void);
