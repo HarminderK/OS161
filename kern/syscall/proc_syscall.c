@@ -180,13 +180,12 @@ void sys__exit(int exitcode)
     sys_exit_helper();
 }
 
-int sys_execv(const char *program, char **args)
-{
+int
+sys_execv(const char *program, char **args) {
 
     // Copy the arguments from the old address space
-    if (program == NULL || args == NULL)
-    {
-        return ENOENT;
+    if(program == NULL || args == NULL){
+        return EFAULT;
     }
 
     if(strlen((char *)program) > PATH_MAX){
@@ -200,15 +199,18 @@ int sys_execv(const char *program, char **args)
         return ENOMEM;
     }
 
-    int argc = 0;
-    while (args[argc] != NULL)
-    {
-        argc++;
+    if(dest[0] == '\0'){
+        kfree(dest);
+        return EINVAL;
     }
 
+    int argc = 0;
+    while(args[argc] != NULL){
+        argc++;
+    }
+    
     char **argv = kmalloc(sizeof(char *) * (argc + 1));
-    if (argv == NULL)
-    {
+    if(argv == NULL){
         return ENOMEM;
     }
     int i;
@@ -247,12 +249,20 @@ int sys_execv(const char *program, char **args)
     // Load a new executable
     struct vnode *vn;
     res = vfs_open(dest, O_RDONLY, 0, &vn);
+    if(res){
+        for(i = 0; i < argc; i++){
+            kfree(argv[i]);
+        }
+        kfree(argv);
+        as_deactivate();
+        as = proc_setas(old_as);
+        as_destroy(as);
+        return EFAULT;
+    }
     vaddr_t entrypoint;
     res = load_elf(vn, &entrypoint);
-    if (res)
-    {
-        for (i = 0; i < argc; i++)
-        {
+    if(res){
+        for(i = 0; i < argc; i++){
             kfree(argv[i]);
         }
         kfree(argv);
@@ -268,10 +278,8 @@ int sys_execv(const char *program, char **args)
     // Define a new stack region
     vaddr_t stackptr;
     res = as_define_stack(as, &stackptr);
-    if (res)
-    {
-        for (i = 0; i < argc; i++)
-        {
+    if(res){
+        for(i = 0; i < argc; i++){
             kfree(argv[i]);
         }
         kfree(argv);
