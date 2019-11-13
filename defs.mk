@@ -13,7 +13,7 @@
 # The things that can be set here are documented in mk/os161.config.mk.
 #
 
-OSTREE=/ubc/ece/home/ugrads/t/t2p1b/os161/root
+OSTREE=/ubc/ece/home/ugrads/h/huayan/os161/root
 PLATFORM=sys161
 MACHINE=mips
 COMPAT_CFLAGS= -DNEED_NTOHLL

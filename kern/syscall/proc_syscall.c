@@ -4,7 +4,7 @@
 #include <proc.h>
 #include <addrspace.h>
 #include <mips/trapframe.h>
-#include <file.h>
+#include <filetable.h>
 #include <thread.h>
 #include <kern/errno.h>
 #include <current.h>
@@ -41,7 +41,7 @@ int sys_fork(struct trapframe *tf, pid_t *retval)
         return ENOMEM;
     }
 
-    res = filetable_copy(&(new_proc->p_filetable));
+    res = filetable_copy(curproc->p_filetable ,&(new_proc->p_filetable));
     if (res)
     {
         pid_destroy(tmp_pid);
@@ -59,16 +59,16 @@ int sys_fork(struct trapframe *tf, pid_t *retval)
     /* copy trapframe */
     *new_tf = *tf;
 
-    lock_acquire(curproc->p_child_lock);
-    for (int i = 0; i < PID_MAX; i++)
-    {
-        if (curproc->p_children[i] == NULL)
-        {
-            curproc->p_children[i] = &(new_proc->p_pid);
-            break;
-        }
-    }
-    lock_release(curproc->p_child_lock);
+    // lock_acquire(curproc->p_child_lock);
+    // for (int i = 0; i < PID_MAX; i++)
+    // {
+    //     if (curproc->p_children[i] == NULL)
+    //     {
+    //         curproc->p_children[i] = &(new_proc->p_pid);
+    //         break;
+    //     }
+    // }
+    // lock_release(curproc->p_child_lock);
 
     res = thread_fork("new thread", new_proc, &enter_forked_process, (void *)new_tf, 0);
     if (res)
@@ -110,119 +110,38 @@ int sys_waitpid(pid_t pid, int *status, int options, pid_t *retval)
     {
         return ESRCH;
     }
-    /* Prevent from waiting for itself */
-    if((curproc->p_pid == pid) || (curproc->p_ppid == pid) ) {
-        return ECHILD;
-    }
-    // /* NULL status */
-    // if (status == NULL)
-    // {
-    //     return 0;
-    // }
+
     /* bad pointer */
     if((status == (int *)0x80000000) || (status == (int *)0x40000000)) {
         return EFAULT;
     }
 
-    struct pid *cur_pid = pid_get(pid);
-
-    if (cur_pid == NULL)
-    {
-        return ESRCH;
-    }
-    bool isChild = false;
-
-    /* menu process */
-    if (pid == 2)
-    {
-        isChild = true;
-    }
-    lock_acquire(curproc->p_child_lock);
-    for (int i = 0; i < PID_MAX; i++)
-    {
-        if( curproc->p_children[i] == NULL) {
-            continue;
-        }
-        else if ( *(curproc->p_children[i]) == pid)
-        {
-            isChild = true;
-            break;
-        }
-    }
-    lock_release(curproc->p_child_lock);
-    if (!isChild)
-    {
-        return ECHILD;
-    }
-
-    lock_acquire(cur_pid->pid_lock);
-    /* wait for the pid to exit, if it has exited, return the status and pid */
-    if (cur_pid->exited == false)
-    {
-        cv_wait(cur_pid->pid_cv, cur_pid->pid_lock);
+    int exit_status;
+    int res = pid_wait(pid, &exit_status);
+    if(res) {
+        return res;
     }
 
     /* assign status if not status is not NULL, decode in _exit and save in exitstatus */
     if (status != NULL)
     {
-        int res = copyout((const void *)&(cur_pid->exit_status), (userptr_t)status, sizeof(cur_pid->exit_status));
+        int res = copyout((const void *)&(exit_status), (userptr_t)status, sizeof(int));
         if (res)
         {
+            // lock_release(pm_lock);
             return res;
         }
     }
 
     *retval = pid;
-    lock_release(cur_pid->pid_lock);
-    // pid_destroy(pid);
+
     return 0;
 }
 
 void sys__exit(int exitcode)
 {
-    struct pid *pid = pid_get(curproc->p_pid);
-
-    lock_acquire(pid->pid_lock);
-    // pid_t t_pid = -1;
-    exitcode = _MKWAIT_EXIT(exitcode);
-    pid->exited = true;
-    pid->exit_status = exitcode;
-    int i;
-    lock_acquire(curproc->p_child_lock);
-    for (i = 0; i < PID_MAX; i++)
-    {
-        if (curproc->p_children[i] != NULL)
-        {
-            struct proc *cur = curproc;
-            struct pid *child = pid_get( *(cur->p_children[i]));
-            lock_acquire(child->pid_lock);
-            if (child->exited == true)
-            {
-                lock_release(child->pid_lock);
-                pid_destroy( *(curproc->p_children[i]));
-                curproc->p_children[i] = NULL;
-            }
-            else
-            {
-                lock_release(child->pid_lock);
-            }
-        }
-    }
-    lock_release(curproc->p_child_lock);
-    /* Check for alive parents */
-   
-    if (pid_get(curproc->p_ppid)->exited == false)
-    {
-        cv_broadcast(pid->pid_cv, pid->pid_lock);        
-        lock_release(pid->pid_lock);
-        sys_exit_helper(curproc);
-    }
-     else 
-    {
-        lock_release(pid->pid_lock);
-        pid_destroy(curproc->p_pid);
-        sys_exit_helper(curproc);
-    }
+    /* let pid_exit do the work, does not return */
+    pid_exit(exitcode);
 }
 
 int
@@ -233,8 +152,7 @@ sys_execv(const char *program, char **args) {
         return EFAULT;
     }
 
-    if (strlen((char *)program) > PATH_MAX)
-    {
+    if(strlen((char *)program) > PATH_MAX){
         return E2BIG;
     }
 
@@ -260,20 +178,16 @@ sys_execv(const char *program, char **args) {
         return ENOMEM;
     }
     int i;
-    for (i = 0; i <= argc; i++)
-    {
+    for(i = 0; i <= argc; i++){
         argv[i] = NULL;
     }
-
-    for (i = 0; i < argc; i++)
-    {
-        size_t len = sizeof(char) * (strlen(args[i]) + 1); // Plus the NULL terminator
-        argv[i] = kmalloc(len);
-        res = copyinstr((const_userptr_t)args[i], argv[i], len, NULL);
-        if (res)
-        {
-            for (i = 0; i < argc; i++)
-            {
+    
+    for(i = 0; i < argc; i++){
+        size_t len = sizeof(char)*(strlen(args[i]) + 1); // Plus the NULL terminator
+        argv[i] = kmalloc(len); 
+        res = copyinstr((const_userptr_t) args[i], argv[i], len, NULL);
+        if (res) {
+            for(i = 0; i < argc; i++){
                 kfree(argv[i]);
             }
             kfree(argv);
@@ -347,7 +261,7 @@ sys_execv(const char *program, char **args) {
 
     for(i = argc - 1; i >= 0; i--){
         len = sizeof(char) * (strlen(argv[i]) + 1); // Plus null terminator '\0'
-        aligned = ROUNDUP(len, 4);
+        aligned = ROUNDUP(len,4);
         stackptr -= aligned;
         userargvptr[i] = stackptr;
         res = copyoutstr(argv[i], (userptr_t) stackptr, aligned, &len); // error check
@@ -383,9 +297,8 @@ sys_execv(const char *program, char **args) {
 
     vaddr_t userspaceAddr = stackptr;
 
-    // Clean up the old address space,
-    for (i = 0; i < argc; i++)
-    {
+    // Clean up the old address space, 
+    for(i = 0; i < argc; i++){
         kfree(argv[i]);
     }
     kfree(argv);
@@ -399,3 +312,4 @@ sys_execv(const char *program, char **args) {
 
     return -1;
 }
+

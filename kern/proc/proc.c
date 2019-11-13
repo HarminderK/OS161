@@ -50,7 +50,7 @@
 #include <vnode.h>
 #include <limits.h>
 #include <pid.h>
-#include <file.h>
+#include <filetable.h>
 #include <synch.h>
 
 /*
@@ -61,47 +61,52 @@ struct proc *kproc;
 /*
  * Create a proc structure.
  */
-static
-struct proc *
+static struct proc *
 proc_create(const char *name)
 {
 	struct proc *proc;
 
 	proc = kmalloc(sizeof(*proc));
-	if (proc == NULL) {
+	if (proc == NULL)
+	{
 		return NULL;
 	}
 	proc->p_name = kstrdup(name);
-	if (proc->p_name == NULL) {
+	if (proc->p_name == NULL)
+	{
 		kfree(proc);
 		return NULL;
 	}
 
 	/* initialize pid */
 	int res = pid_create(&(proc->p_pid));
-	if(res) {
+	if (res)
+	{
 		kfree(proc);
 		kfree(proc->p_name);
 		return NULL;
 	}
-	if(proc->p_pid != 1) {
-		proc->p_ppid = curproc->p_pid;
+	if (proc->p_pid != 1)
+	{
+		pid_get(proc->p_pid)->ppid = curproc->p_pid;
 	}
 
-	proc->p_child_lock = lock_create("p_child_lock");
-	for (int i = 0; i < PID_MAX; i++){
-        proc->p_children[i] = NULL;
-    }
+	// proc->p_child_lock = lock_create("p_child_lock");
+	// for (int i = 0; i < PID_MAX; i++)
+	// {
+	// 	proc->p_children[i] = NULL;
+	// }
 
 	threadarray_init(&proc->p_threads);
 	spinlock_init(&proc->p_lock);
+
+	proc->p_filetable = NULL;
 
 	/* VM fields */
 	proc->p_addrspace = NULL;
 
 	/* VFS fields */
 	proc->p_cwd = NULL;
-
 
 	return proc;
 }
@@ -112,8 +117,7 @@ proc_create(const char *name)
  * Note: nothing currently calls this. Your wait/exit code will
  * probably want to do so.
  */
-void
-proc_destroy(struct proc *proc)
+void proc_destroy(struct proc *proc)
 {
 	/*
 	 * You probably want to destroy and null out much of the
@@ -133,13 +137,15 @@ proc_destroy(struct proc *proc)
 	 */
 
 	/* VFS fields */
-	if (proc->p_cwd) {
+	if (proc->p_cwd)
+	{
 		VOP_DECREF(proc->p_cwd);
 		proc->p_cwd = NULL;
 	}
 
 	/* VM fields */
-	if (proc->p_addrspace) {
+	if (proc->p_addrspace)
+	{
 		/*
 		 * If p is the current process, remove it safely from
 		 * p_addrspace before destroying it. This makes sure
@@ -175,11 +181,13 @@ proc_destroy(struct proc *proc)
 		 */
 		struct addrspace *as;
 
-		if (proc == curproc) {
+		if (proc == curproc)
+		{
 			as = proc_setas(NULL);
 			as_deactivate();
 		}
-		else {
+		else
+		{
 			as = proc->p_addrspace;
 			proc->p_addrspace = NULL;
 		}
@@ -187,13 +195,15 @@ proc_destroy(struct proc *proc)
 	}
 
 	/* Clear memory assigned */
-	if(proc->p_filetable) {
+	if (proc->p_filetable)
+	{
 		filetable_destroy(proc->p_filetable);
 	}
 	/* destroy proc lock */
-	if(proc->p_child_lock) {
-		lock_destroy(proc->p_child_lock);
-	}
+	// if (proc->p_child_lock)
+	// {
+	// 	lock_destroy(proc->p_child_lock);
+	// }
 	threadarray_cleanup(&proc->p_threads);
 	spinlock_cleanup(&proc->p_lock);
 
@@ -204,11 +214,11 @@ proc_destroy(struct proc *proc)
 /*
  * Create the process structure for the kernel.
  */
-void
-proc_bootstrap(void)
+void proc_bootstrap(void)
 {
 	kproc = proc_create("[kernel]");
-	if (kproc == NULL) {
+	if (kproc == NULL)
+	{
 		panic("proc_create for kproc failed\n");
 	}
 }
@@ -225,7 +235,8 @@ proc_create_runprogram(const char *name)
 	struct proc *newproc;
 
 	newproc = proc_create(name);
-	if (newproc == NULL) {
+	if (newproc == NULL)
+	{
 		return NULL;
 	}
 
@@ -241,7 +252,8 @@ proc_create_runprogram(const char *name)
 	 * the only reference to it.)
 	 */
 	spinlock_acquire(&curproc->p_lock);
-	if (curproc->p_cwd != NULL) {
+	if (curproc->p_cwd != NULL)
+	{
 		VOP_INCREF(curproc->p_cwd);
 		newproc->p_cwd = curproc->p_cwd;
 	}
@@ -259,8 +271,7 @@ proc_create_runprogram(const char *name)
  * the timer interrupt context switch, and any other implicit uses
  * of "curproc".
  */
-int
-proc_addthread(struct proc *proc, struct thread *t)
+int proc_addthread(struct proc *proc, struct thread *t)
 {
 	int result;
 	int spl;
@@ -270,7 +281,8 @@ proc_addthread(struct proc *proc, struct thread *t)
 	spinlock_acquire(&proc->p_lock);
 	result = threadarray_add(&proc->p_threads, t, NULL);
 	spinlock_release(&proc->p_lock);
-	if (result) {
+	if (result)
+	{
 		return result;
 	}
 	spl = splhigh();
@@ -288,8 +300,7 @@ proc_addthread(struct proc *proc, struct thread *t)
  * the timer interrupt context switch, and any other implicit uses
  * of "curproc".
  */
-void
-proc_remthread(struct thread *t)
+void proc_remthread(struct thread *t)
 {
 	struct proc *proc;
 	unsigned i, num;
@@ -301,8 +312,10 @@ proc_remthread(struct thread *t)
 	spinlock_acquire(&proc->p_lock);
 	/* ugh: find the thread in the array */
 	num = threadarray_num(&proc->p_threads);
-	for (i=0; i<num; i++) {
-		if (threadarray_get(&proc->p_threads, i) == t) {
+	for (i = 0; i < num; i++)
+	{
+		if (threadarray_get(&proc->p_threads, i) == t)
+		{
 			threadarray_remove(&proc->p_threads, i);
 			spinlock_release(&proc->p_lock);
 			spl = splhigh();
@@ -330,7 +343,8 @@ proc_getas(void)
 	struct addrspace *as;
 	struct proc *proc = curproc;
 
-	if (proc == NULL) {
+	if (proc == NULL)
+	{
 		return NULL;
 	}
 

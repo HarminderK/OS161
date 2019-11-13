@@ -36,6 +36,7 @@
 #include <types.h>
 #include <kern/errno.h>
 #include <kern/fcntl.h>
+#include <kern/unistd.h>
 #include <lib.h>
 #include <proc.h>
 #include <current.h>
@@ -44,8 +45,75 @@
 #include <vfs.h>
 #include <syscall.h>
 #include <test.h>
-#include <file.h>
+#include <openfile.h>
+#include <filetable.h>
 #include <pid.h>
+
+/*
+ * Open a file on a selected file descriptor. Takes care of various
+ * minutiae, like the vfs-level open destroying pathnames.
+ */
+static int
+placed_open(const char *path, int openflags, int fd)
+{
+	struct openfile *newfile, *oldfile;
+	char mypath[32];
+	int result;
+
+	/*
+	 * The filename comes from the kernel, in fact right in this
+	 * file; assume reasonable length. But make sure we fit.
+	 */
+	KASSERT(strlen(path) < sizeof(mypath));
+	strcpy(mypath, path);
+
+	result = openfile_open(mypath, openflags, 0664, &newfile);
+	if (result)
+	{
+		return result;
+	}
+
+	/* place the file in the filetable in the right slot */
+	filetable_placeat(curproc->p_filetable, newfile, fd, &oldfile);
+
+	/* the table should previously have been empty */
+	KASSERT(oldfile == NULL);
+
+	return 0;
+}
+
+/*
+ * Open the standard file descriptors: stdin, stdout, stderr.
+ *
+ * Note that if we fail part of the way through we can leave the fds
+ * we've already opened in the file table and they'll get cleaned up
+ * by process exit.
+ */
+static int
+open_stdfds(const char *inpath, const char *outpath, const char *errpath)
+{
+	int result;
+
+	result = placed_open(inpath, O_RDONLY, STDIN_FILENO);
+	if (result)
+	{
+		return result;
+	}
+
+	result = placed_open(outpath, O_WRONLY, STDOUT_FILENO);
+	if (result)
+	{
+		return result;
+	}
+
+	result = placed_open(errpath, O_WRONLY, STDERR_FILENO);
+	if (result)
+	{
+		return result;
+	}
+
+	return 0;
+}
 
 /*
  * Load program "progname" and start running it in usermode.
@@ -53,8 +121,7 @@
  *
  * Calls vfs_open on progname and thus may destroy it.
  */
-int
-runprogram(char *progname)
+int runprogram(char *progname)
 {
 	struct addrspace *as;
 	struct vnode *v;
@@ -63,20 +130,36 @@ runprogram(char *progname)
 
 	/* Open the file. */
 	result = vfs_open(progname, O_RDONLY, 0, &v);
-	if (result) {
+	if (result)
+	{
 		return result;
 	}
 
-	/* initialize filetable */
-	filetable_init(curproc->p_filetable);
+	/* Set up stdin/stdout/stderr if necessary. */
+	if (curproc->p_filetable == NULL)
+	{
+		curproc->p_filetable = filetable_create();
+		if (curproc->p_filetable == NULL)
+		{
+			vfs_close(v);
+			return ENOMEM;
+		}
 
+		result = open_stdfds("con:", "con:", "con:");
+		if (result)
+		{
+			vfs_close(v);
+			return result;
+		}
+	}
 
 	/* We should be a new process. */
 	KASSERT(proc_getas() == NULL);
 
 	/* Create a new address space. */
 	as = as_create();
-	if (as == NULL) {
+	if (as == NULL)
+	{
 		vfs_close(v);
 		return ENOMEM;
 	}
@@ -87,7 +170,8 @@ runprogram(char *progname)
 
 	/* Load the executable. */
 	result = load_elf(v, &entrypoint);
-	if (result) {
+	if (result)
+	{
 		/* p_addrspace will go away when curproc is destroyed */
 		vfs_close(v);
 		return result;
@@ -98,18 +182,18 @@ runprogram(char *progname)
 
 	/* Define the user stack in the address space */
 	result = as_define_stack(as, &stackptr);
-	if (result) {
+	if (result)
+	{
 		/* p_addrspace will go away when curproc is destroyed */
 		return result;
 	}
 
 	/* Warp to user mode. */
 	enter_new_process(0 /*argc*/, NULL /*userspace addr of argv*/,
-			  NULL /*userspace addr of environment*/,
-			  stackptr, entrypoint);
+					  NULL /*userspace addr of environment*/,
+					  stackptr, entrypoint);
 
 	/* enter_new_process does not return. */
 	panic("enter_new_process returned\n");
 	return EINVAL;
 }
-

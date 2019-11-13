@@ -12,10 +12,9 @@
 */
 struct pid {
     pid_t pid;
-    // pid_t parent_pid;
+    pid_t ppid;
     bool exited;
     int exit_status;
-    struct lock *pid_lock;
     struct cv *pid_cv;
 };
  
@@ -24,6 +23,7 @@ struct pid {
 */
     struct pid *procs[PID_MAX];
     struct lock *pm_lock;
+    // struct cv *pid_cv;
 
 /* initialize pid_manager */
 int pid_manager_init(void);
@@ -36,6 +36,12 @@ int pid_destroy(pid_t pid);
 
 /* get a pid struct */
 struct pid* pid_get(pid_t pid);
+
+/* wait for a pid */
+int pid_wait(pid_t pid, int *retval);
+
+/* Do most of work for sys_exit */
+void pid_exit(int exitcode);
 
 
 #endif /* _PID_H_ */
