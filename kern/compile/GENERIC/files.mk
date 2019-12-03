@@ -120,5 +120,6 @@ SRCS+=$(KTOP)/vfs/vfslist.c
 SRCS+=$(KTOP)/vfs/vfslookup.c
 SRCS+=$(KTOP)/vfs/vfspath.c
 SRCS+=$(KTOP)/vfs/vnode.c
-SRCS+=$(KTOP)/vm/addrspace.c
 SRCS+=$(KTOP)/vm/kmalloc.c
+SRCS+=$(KTOP)/vm/pagetable.c
+SRCS+=$(KTOP)/vm/vm.c

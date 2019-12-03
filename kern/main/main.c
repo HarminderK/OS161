@@ -108,6 +108,9 @@ boot(void)
 	/* Early initialization. */
 	ram_bootstrap();
 
+	/* intialize pagetable before we want to use kmalloc */
+	vm_bootstrap();
+	
 	/* initialize pid_manager */
 	pid_manager_init();
 	
@@ -128,7 +131,7 @@ boot(void)
 	kheap_nextgeneration();
 
 	/* Late phase of initialization. */
-	vm_bootstrap();
+	// vm_bootstrap();
 	kprintf_bootstrap();
 	thread_start_cpus();
 

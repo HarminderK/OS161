@@ -1,8 +1,7 @@
-
 #include <types.h>
 #include <kern/errno.h>
 #include <lib.h>
-#include <spl.h>
+#include <spl.h>	
 #include <spinlock.h>
 #include <proc.h>
 #include <current.h>
@@ -34,7 +33,7 @@
 /*
  * Wrap ram_stealmem in a spinlock.
  */
-static struct spinlock stealmem_lock = SPINLOCK_INITIALIZER;
+// static struct spinlock stealmem_lock = SPINLOCK_INITIALIZER;
 
 void
 vm_bootstrap(void)
@@ -42,29 +41,31 @@ vm_bootstrap(void)
 	pagetable_init();
 }
 
-static
-paddr_t
-getppages(unsigned long npages)
-{
-	paddr_t addr;
+// static
+// paddr_t
+// getppages(unsigned long npages)
+// {
+// 	paddr_t addr;
 
-	// spinlock_acquire(&stealmem_lock);
+// 	spinlock_acquire(&stealmem_lock);
 
-    // //find a space in p_mem, evict it if necessary 
-	// addr = ram_stealmem(npages);
+// 	addr = ram_stealmem(npages);
 
-	// spinlock_release(&stealmem_lock);
-    addr = pagetable_get(npages);
+// 	spinlock_release(&stealmem_lock);
 
-	return addr;
-}
+// 	return addr;
+// }
 
 /* Allocate/free some kernel-space virtual pages */
 vaddr_t
 alloc_kpages(unsigned npages)
 {
 	paddr_t pa;
-	pa = getppages(npages);
+	// pa = getppages(npages);
+	// if (pa==0) {
+	// 	return 0;
+	// }
+	pa = pagetable_get(npages);
 	if (pa==0) {
 		return 0;
 	}
@@ -298,17 +299,17 @@ as_prepare_load(struct addrspace *as)
 	KASSERT(as->as_pbase2 == 0);
 	KASSERT(as->as_stackpbase == 0);
 
-	as->as_pbase1 = getppages(as->as_npages1);
+	as->as_pbase1 = pagetable_get(as->as_npages1);
 	if (as->as_pbase1 == 0) {
 		return ENOMEM;
 	}
 
-	as->as_pbase2 = getppages(as->as_npages2);
+	as->as_pbase2 = pagetable_get(as->as_npages2);
 	if (as->as_pbase2 == 0) {
 		return ENOMEM;
 	}
 
-	as->as_stackpbase = getppages(DUMBVM_STACKPAGES);
+	as->as_stackpbase = pagetable_get(DUMBVM_STACKPAGES);
 	if (as->as_stackpbase == 0) {
 		return ENOMEM;
 	}

@@ -9,12 +9,12 @@
 
 struct pagetable_entry {
 	// struct lock *pte_lock;
-    bool on_disk; //may need a disk variable for lseek
+    // bool on_disk; //may need a disk variable for lseek
     paddr_t pfn;
-    off_t pgentry_offset;
-    pid_t pid;
+    // off_t pgentry_offset;
+    // pid_t pid;
     int state;
-    int permission;
+    // int permission;
     struct pagetable_entry *next;
     struct pagetable_entry *prev;
 };
@@ -22,19 +22,16 @@ struct pagetable_entry {
 struct pagetable {
     struct pagetable_entry *pagetable_arr;
     int fd;
-}
+};
 
-void pagetable_init();
+void pagetable_init(void);
 
 //int add_pagetable_entry(vaddr_t vaddr); //
 
 //To be called by getppages
-paadr_t pagetable_get(unsigned long npages);
+paddr_t pagetable_get(unsigned long npages);
 
-//To be called by alloc_kpages();
-paddr_t pagetable_alloc(unsigned npages);
-
-void pagetable_evict(vaddr_t vaddr);
+struct pagetable_entry *pagetable_evict(int npages);
 
 void pagetable_delete(vaddr_t vaddr);
 
