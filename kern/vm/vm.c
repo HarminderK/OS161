@@ -75,8 +75,7 @@ alloc_kpages(unsigned npages)
 void
 free_kpages(vaddr_t addr)
 {
-	/* nothing - leak the memory. */
-
+	page_free(addr);
 	(void)addr;
 }
 

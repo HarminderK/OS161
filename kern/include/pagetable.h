@@ -11,12 +11,12 @@ struct pagetable_entry {
 	// struct lock *pte_lock;
     // bool on_disk; //may need a disk variable for lseek
     paddr_t pfn;
-    // off_t pgentry_offset;
+    off_t pgentry_offset;
+    struct pagetable_entry *start;
     // pid_t pid;
     int state;
-    // int permission;
-    struct pagetable_entry *next;
-    struct pagetable_entry *prev;
+    int size; //num of pages it occupys
+
 };
 
 struct pagetable {
@@ -33,7 +33,13 @@ paddr_t pagetable_get(unsigned long npages);
 
 struct pagetable_entry *pagetable_evict(int npages);
 
+int page_free(vaddr_t addr);
+
 void pagetable_delete(vaddr_t vaddr);
+
+int pagetable_entry_to_disk(struct pagetable_entry *pg_entry); 
+
+void swap_bootstrap(void);
 
 
 

@@ -3,11 +3,21 @@
 #include <pagetable.h>
 #include <vm.h>
 #include <synch.h>
+#include <bitmap.h>
+#include <vnode.h>
+#include <vfs.h>
+#include <kern/iovec.h>
+#include <uio.h>
+#include <kern/fcntl.h>
+#include <stat.h>
 
 struct pagetable_entry *pagetable;
 // struct lock *pt_lock;
 unsigned start_page, page_num;
 static struct spinlock pt_lock = SPINLOCK_INITIALIZER;
+struct vnode *vn;
+struct bitmap *bitmap;
+static struct spinlock btm_lock = SPINLOCK_INITIALIZER;
 
 void pagetable_init(void)
 {
@@ -32,51 +42,54 @@ void pagetable_init(void)
     start_page = start / PAGE_SIZE;
     page_num = (end / PAGE_SIZE) - start_page;
 
-    struct pagetable_entry *tmp_ptentry;
     for (unsigned i = 0; i < page_num; i++)
     {
         struct pagetable_entry *cur = &pagetable[i];
         cur->pfn = (paddr_t)(i + start_page) * PAGE_SIZE;
-        if (i == 0)
-        {
-            cur->prev = NULL;
-        }
-        else
-        {
-            if (i == page_num - 1)
-            {
-                cur->next = NULL;
-            }
-            cur->prev = tmp_ptentry;
-            cur->prev->next = cur;
-        }
-        tmp_ptentry = cur;
         cur->state = PT_FREE;
+        cur->size = 0;
+        cur->start = NULL;
     }
+}
+
+void swap_bootstrap(void) {
+    char diskpath[] = "lhd0raw:";
+    struct stat disk_stat;
+	int res = vfs_open(diskpath, O_RDWR, 0, &vn);
+	if (res) {
+		panic("" + res);
+	}
+
+    res = VOP_STAT(vn, &disk_stat);
+    if (res) {
+		panic("" + res);
+	}
+    bitmap = bitmap_create(disk_stat.st_size / PAGE_SIZE);
 }
 
 paddr_t pagetable_get(unsigned long npages)
 {
     spinlock_acquire(&pt_lock);
     bool need_to_evict = true;
-    struct pagetable_entry *base;
-    struct pagetable_entry *cur = &pagetable[0];
+    int base;
+    struct pagetable_entry *base_entry;
     for (unsigned i = 0; i < page_num - npages; i++)
     {
+        struct pagetable_entry *cur = &pagetable[i];
         if (cur->state == PT_FREE)
         {
             need_to_evict = false;
-            base = cur;
-            for (unsigned j = 0; j < npages - 1; j++)
+            base = (int) i;
+            i++;
+            for (;i < (unsigned)base + npages; i++)
             {
-                cur = cur->next;
-                if (cur->next == NULL)
+                if (i == page_num)
                 {
-                    spinlock_release(&pt_lock);
-                    panic("Next page is NULL!\n");
-                    return 0;
+                    //reach end of array, need to evict
+                    need_to_evict = true;
+                    break;
                 }
-                if (cur->next->state != PT_FREE)
+                if (pagetable[i].state != PT_FREE)
                 {
                     need_to_evict = true;
                     break;
@@ -85,86 +98,109 @@ paddr_t pagetable_get(unsigned long npages)
             //found multiple contiguous free block
             if (!need_to_evict)
             {
-                paddr_t pa = base->pfn;
+                base_entry = &pagetable[base];
                 //mark the pages found to be Dirty
-                for (unsigned k = 0; k < npages; k++) {
-                    base->state = PT_DIRTY;
-                    base = base->next;
+                for (unsigned k = (unsigned) base; k < (unsigned) base + npages; k++) {
+                    struct pagetable_entry *tmp = &pagetable[k];
+                    tmp->size = npages;
+                    tmp->state = PT_DIRTY;
+                    tmp->start = base_entry;
                 }
                 spinlock_release(&pt_lock);
-                return pa;
+                return base_entry->pfn;
             }
         }
-        cur = cur->next;
     }
     spinlock_release(&pt_lock);
     if (need_to_evict == true)
     {
-        /* TODO: Uncomment after evict implemented */
-        // base = pagetable_evict(npages);
-        // return base->pfn;
-        panic("Run out of memory, need to evict!\n");
-        return 0;
+        base_entry = pagetable_evict(npages);
+        return base_entry->pfn;
+        // panic("Run out of memory, need to evict!\n");
+    }
+    return 0;
+}
+
+int page_free(vaddr_t addr) {
+    struct pagetable_entry *entry = (struct pagetable_entry *) addr;
+    int i = 0;
+    while(entry != &pagetable[i]){
+        i++;
+    }
+
+    for (i = 0; i < entry->size; i++) {
+        entry->state = PT_FREE;
+        entry->size = 0;
     }
     return 0;
 }
 
 struct pagetable_entry *pagetable_evict(int npages)
 {
-    (void)npages;
-    return NULL;
-    // int page_num = (length - (length % PAGE_SIZE) + PAGE_SIZE) / PAGE_SIZE;
-    // int evict = (((int)rand()) * page_num) % page_num;
+    int evict = (((int)random()) * page_num) % page_num;
 
-    // if (npages > page_num)
-    // {
-    //     return null;
-    // }
+    spinlock_acquire(&pt_lock);
+    struct pagetable_entry *start = (&pagetable[evict])->start;
 
-    // struct pagetable_entry *pg_entry = pagetable_entry[0];
+    while(&pagetable[evict] != NULL && &pagetable[evict] != start){
+        evict--;
+    }
+    int s = evict;
+    int i;
 
-    // if (pg_entry == null)
-    // {
-    //     return null;
-    // }
+    for(i = 0; i < start->size; i++){
+        pagetable_entry_to_disk(&pagetable[evict]);
+        pagetable[evict].state = PT_DIRTY;
+        i++;
+        evict++;
+    }
 
-    // spinlock_acquire(pt_lock);
-    // int i = 0;
-    // while (pg_entry->next != null && evict != i)
-    // {
-    //     pg_entry = pg_entry->next;
-    //     i++;
-    // }
-
-    // i = 1;
-    // struct pagetable_entry *start = pg_entry;
-    // int res = pagetable_entry_to_disk(pg_entry);
-    // start->state = PT_FREE;
-    // while (pg_entry->next != null && i != npages)
-    // {
-    //     pg_entry = pg_entry->next;
-    //     res = pagetable_entry_to_disk(pg_entry);
-    //     pg_entry->state = PT_FREE;
-    //     i++;
-    // }
-    // if (i != npages)
-    // {
-    //     while (start->prev != null && i != npages)
-    //     {
-    //         start = start->prev;
-    //         res = pagetable_entry_to_disk(pg_entry);
-    //         start->state = PT_FREE;
-    //         i++;
-    //     }
-    // }
-    // spinspinlock_release(pt_lock);
-    // return start;
+    while (&pagetable[evict] != NULL && i < npages)
+    {
+        int size = pagetable[evict].size;
+        for(i = 0; i < size; i++){
+            pagetable_entry_to_disk(&pagetable[evict]);
+            pagetable[evict].state = PT_DIRTY;
+            i++;
+            evict++;
+        }
+    }
+    while (&pagetable[evict] == NULL && i < npages)
+    {
+        evict = s - 1;
+        struct pagetable_entry *prev_start = (&pagetable[evict])->start;
+        while(&pagetable[evict] != NULL && &pagetable[evict] != prev_start){
+            pagetable_entry_to_disk(&pagetable[evict]);
+            (&pagetable[evict])->state = PT_DIRTY;
+            i++;
+            evict--;
+        }
+        start = prev_start;
+    }
+    spinlock_release(&pt_lock);
+    return start;
 }
 
-// int pagetable_entry_to_disk(struct pagetable_entry)
-// {
-//     if (!spinlock_do_i_hold(pt_lock))
-//     {
-//         return -1;
-//     }
-// }
+int pagetable_entry_to_disk(struct pagetable_entry *pg_entry)
+{
+    if (!spinlock_do_i_hold(&pt_lock))
+    {
+        return -1;
+    }
+
+    unsigned int offset_index;
+    spinlock_acquire(&btm_lock);
+	int res = bitmap_alloc(bitmap, &offset_index);
+	spinlock_release(&btm_lock);
+
+    struct iovec iov;
+    struct uio uio;
+    pg_entry->pgentry_offset = (off_t) offset_index * PAGE_SIZE;
+
+    uio_kinit(&iov, &uio, (void *)PADDR_TO_KVADDR(pg_entry->pfn), PAGE_SIZE, offset_index * PAGE_SIZE, UIO_WRITE);
+    res = VOP_WRITE(vn, &uio);
+	if(res) {
+		return res;
+	}
+    return offset_index;
+}

@@ -51,6 +51,7 @@
 #include <version.h>
 #include "autoconf.h"  // for pseudoconfig
 #include <pid.h>
+#include <pagetable.h>
 
 /*
  * These two pieces of data are maintained by the makefiles and build system.
@@ -118,6 +119,7 @@ boot(void)
 	thread_bootstrap();
 	hardclock_bootstrap();
 	vfs_bootstrap();
+	
 	kheap_nextgeneration();
 
 	/* Probe and initialize devices. Interrupts should come on. */
@@ -140,6 +142,8 @@ boot(void)
 
 	kheap_nextgeneration();
 
+	/* initilizing swap vnode in pagetable */
+	swap_bootstrap();
 	/*
 	 * Make sure various things aren't screwed up.
 	 */
