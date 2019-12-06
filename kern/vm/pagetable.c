@@ -3,6 +3,7 @@
 #include <pagetable.h>
 #include <vm.h>
 #include <synch.h>
+#include <spinlock.h>
 #include <bitmap.h>
 #include <vnode.h>
 #include <vfs.h>
@@ -11,17 +12,18 @@
 #include <kern/fcntl.h>
 #include <stat.h>
 
+#define KVADDR_TO_PADDR(vaddr) ((vaddr)-0x80000000)
+
 struct pagetable_entry *pagetable;
-// struct lock *pt_lock;
 unsigned start_page, page_num;
 static struct spinlock pt_lock = SPINLOCK_INITIALIZER;
 struct vnode *vn;
 struct bitmap *bitmap;
-static struct spinlock btm_lock = SPINLOCK_INITIALIZER;
 
+/* Initilize the coremap, called by vm_bootstap */
 void pagetable_init(void)
 {
-
+    //get the free sapce that is available
     paddr_t end = ram_getsize();
     paddr_t start = ram_getfirstfree();
     unsigned npages, pagetable_size;
@@ -29,7 +31,6 @@ void pagetable_init(void)
     npages = (end - start) / PAGE_SIZE;
 
     pagetable_size = npages * sizeof(struct pagetable_entry);
-    pagetable_size = ROUNDUP(pagetable_size, PAGE_SIZE);
 
     pagetable = (struct pagetable_entry *)PADDR_TO_KVADDR(start);
     start += pagetable_size;
@@ -39,6 +40,8 @@ void pagetable_init(void)
         panic("Run out of memory!\n");
     }
 
+    //Round the start page size up to align with PAGE_SIZE
+    start = ROUNDUP(start, PAGE_SIZE);
     start_page = start / PAGE_SIZE;
     page_num = (end / PAGE_SIZE) - start_page;
 
@@ -52,21 +55,26 @@ void pagetable_init(void)
     }
 }
 
+/* Initialize vfs node for swapping */
 void swap_bootstrap(void) {
     char diskpath[] = "lhd0raw:";
     struct stat disk_stat;
+    // Open vnode
 	int res = vfs_open(diskpath, O_RDWR, 0, &vn);
 	if (res) {
 		panic("" + res);
 	}
 
+    // Get swap stats
     res = VOP_STAT(vn, &disk_stat);
     if (res) {
 		panic("" + res);
 	}
+    // Build a bitmap to keep track of swap writes
     bitmap = bitmap_create(disk_stat.st_size / PAGE_SIZE);
 }
 
+/* Find a free page or free pages, and return the physical address or the starting pages */
 paddr_t pagetable_get(unsigned long npages)
 {
     spinlock_acquire(&pt_lock);
@@ -85,7 +93,6 @@ paddr_t pagetable_get(unsigned long npages)
             {
                 if (i == page_num)
                 {
-                    //reach end of array, need to evict
                     need_to_evict = true;
                     break;
                 }
@@ -116,25 +123,35 @@ paddr_t pagetable_get(unsigned long npages)
     {
         base_entry = pagetable_evict(npages);
         return base_entry->pfn;
-        // panic("Run out of memory, need to evict!\n");
     }
+    // Shouldn't reach here
     return 0;
 }
 
+/* Free a page or multiple pages */
 int page_free(vaddr_t addr) {
-    struct pagetable_entry *entry = (struct pagetable_entry *) addr;
+    paddr_t pa = KVADDR_TO_PADDR(addr);
+    struct pagetable_entry *entry;
     int i = 0;
-    while(entry != &pagetable[i]){
-        i++;
+
+    for (; i < (int)page_num; i++) {
+        entry = &pagetable[i];
+        if (entry->pfn == pa) {
+            break;
+        }
     }
 
-    for (i = 0; i < entry->size; i++) {
+    int end = i + entry->size;
+    for (; i <  end; i++) {
+        entry = &pagetable[i];
         entry->state = PT_FREE;
         entry->size = 0;
+        entry->start = NULL;
     }
     return 0;
 }
 
+/* Evict Pagetable_entry from physical memory and write to memory */
 struct pagetable_entry *pagetable_evict(int npages)
 {
     int evict = (((int)random()) * page_num) % page_num;
@@ -142,19 +159,14 @@ struct pagetable_entry *pagetable_evict(int npages)
     spinlock_acquire(&pt_lock);
     struct pagetable_entry *start = (&pagetable[evict])->start;
 
+    // Go to the start of page table if there are more than 1 page allocated
     while(&pagetable[evict] != NULL && &pagetable[evict] != start){
         evict--;
     }
     int s = evict;
-    int i;
+    int i = 0;
 
-    for(i = 0; i < start->size; i++){
-        pagetable_entry_to_disk(&pagetable[evict]);
-        pagetable[evict].state = PT_DIRTY;
-        i++;
-        evict++;
-    }
-
+    // Set start to PT_DIRTY starting at the random evict index generated, while going forward
     while (&pagetable[evict] != NULL && i < npages)
     {
         int size = pagetable[evict].size;
@@ -165,6 +177,7 @@ struct pagetable_entry *pagetable_evict(int npages)
             evict++;
         }
     }
+    // Set start to PT_DIRTY starting at the random evict index generated, while going backwards
     while (&pagetable[evict] == NULL && i < npages)
     {
         evict = s - 1;
@@ -177,10 +190,12 @@ struct pagetable_entry *pagetable_evict(int npages)
         }
         start = prev_start;
     }
+    // Release and return the starting point of the free block
     spinlock_release(&pt_lock);
     return start;
 }
 
+// Write to pagetable entry to disk
 int pagetable_entry_to_disk(struct pagetable_entry *pg_entry)
 {
     if (!spinlock_do_i_hold(&pt_lock))
@@ -189,9 +204,9 @@ int pagetable_entry_to_disk(struct pagetable_entry *pg_entry)
     }
 
     unsigned int offset_index;
-    spinlock_acquire(&btm_lock);
+    // spinlock_acquire(&btm_lock);
 	int res = bitmap_alloc(bitmap, &offset_index);
-	spinlock_release(&btm_lock);
+	// spinlock_release(&btm_lock);
 
     struct iovec iov;
     struct uio uio;
